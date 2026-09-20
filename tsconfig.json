@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@coord/protocol": ["packages/protocol/src/index.ts"],
+      "@coord/conflict-engine": ["packages/conflict-engine/src/index.ts"],
+      "@coord/memory": ["packages/memory/src/index.ts"],
+      "@coord/connector": ["packages/connector/src/index.ts"],
+      "@coord/realtime-client": ["packages/realtime-client/src/index.ts"],
+      "@coord/git-intel": ["packages/git-intel/src/index.ts"],
+      "@coord/mcp-server": ["packages/mcp-server/src/index.ts"],
+      "@coord/adapter-codex": ["packages/adapters/codex/src/index.ts"],
+      "@coord/adapter-claude": ["packages/adapters/claude/src/index.ts"],
+      "@coord/control-plane": ["apps/control-plane/src/index.ts"]
+    }
+  },
+  "include": ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "*.ts"]
+}

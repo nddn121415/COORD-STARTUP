@@ -1,0 +1,49 @@
+{
+  "name": "coord",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "vitest run --project e2e",
+    "dev": "node --import tsx --env-file-if-exists=.env apps/control-plane/src/main.ts",
+    "coord": "node --import tsx apps/cli/src/main.ts",
+    "db:migrate": "node --import tsx --env-file-if-exists=.env apps/control-plane/src/migrate.ts",
+    "db:seed": "node --import tsx --env-file-if-exists=.env apps/control-plane/src/seed.ts",
+    "db:local": "node --import tsx scripts/local-postgres.ts",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm test",
+    "demo:token": "node --import tsx scripts/demo-token.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "^3.25.76",
+    "pg": "^8.16.3",
+    "ws": "^8.18.3",
+    "@iarna/toml": "^2.2.5",
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.5",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3",
+    "tsx": "^4.20.6",
+    "tsup": "^8.5.0",
+    "vitest": "^3.2.4",
+    "prettier": "^3.6.2",
+    "eslint": "^9.39.0",
+    "typescript-eslint": "^8.46.0",
+    "embedded-postgres": "18.4.0-beta.17"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@coord/git-intel",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@coord/protocol": "workspace:*"
+  }
+}

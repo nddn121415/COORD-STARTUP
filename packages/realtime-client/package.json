@@ -1,0 +1,10 @@
+{
+  "name": "@coord/realtime-client",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@coord/protocol": "workspace:*",
+    "ws": "^8.18.3"
+  }
+}

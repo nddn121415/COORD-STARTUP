@@ -1,0 +1,20 @@
+{
+  "name": "@coord/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "coord": "../../dist/coord.js",
+    "coordd": "../../dist/coord.js"
+  },
+  "dependencies": {
+    "@coord/connector": "workspace:*",
+    "@coord/git-intel": "workspace:*",
+    "@coord/mcp-server": "workspace:*",
+    "@coord/adapter-codex": "workspace:*",
+    "@coord/adapter-claude": "workspace:*",
+    "commander": "^14.0.0",
+    "@coord/realtime-client": "workspace:*",
+    "@coord/protocol": "workspace:*",
+    "@iarna/toml": "^2.2.5"
+  }
+}
