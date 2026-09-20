@@ -3,6 +3,7 @@ packages:
   - packages/*
   - packages/adapters/*
 allowBuilds:
+  electron-winstaller: false
   electron: true
   sharp: true
   workerd: true
