@@ -1,17 +1,27 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeImage,
+  session,
+  safeStorage,
+  shell,
+  Tray,
+} from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { join, relative, isAbsolute } from 'node:path';
+import { join } from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { createDesktopController } from '../service.js';
-declare const __COORD_PORTAL_URL__: string;
-const portalUrl = __COORD_PORTAL_URL__;
+import { createPeerSession } from '../peer-session.js';
 let window: BrowserWindow | null = null;
-let controller: Awaited<ReturnType<typeof createDesktopController>> | undefined;
+let tray: Tray | undefined;
+let controller: Awaited<ReturnType<typeof createPeerSession>> | undefined;
 const uiPath = join(__dirname, 'ui', 'index.html');
 const uiUrl = pathToFileURL(uiPath).href;
 let quitting = false;
-
 function authorize(event: IpcMainInvokeEvent): void {
   if (
     !window ||
@@ -21,105 +31,85 @@ function authorize(event: IpcMainInvokeEvent): void {
   )
     throw new Error('Untrusted desktop request');
 }
-function requireController() {
-  if (!controller) throw new Error('COORD is still starting. Please try again.');
-  return controller;
-}
-async function openPortal(url: string): Promise<void> {
-  if (!portalUrl) throw new Error('The collaboration website is not configured in this build.');
-  const target = new URL(url),
-    configured = new URL(portalUrl);
-  if (
-    target.origin !== configured.origin ||
-    target.username ||
-    target.password ||
-    !['https:', 'http:'].includes(target.protocol)
-  )
-    throw new Error('COORD refused an untrusted website address.');
-  await shell.openExternal(target.href);
+function state() {
+  return { ...controller!.getState(), startAtLogin: app.getLoginItemSettings().openAtLogin };
 }
 function registerIpc(): void {
   ipcMain.handle('coord:action', async (event, action: unknown, value: unknown) => {
     authorize(event);
     try {
-      const service = requireController();
+      if (!controller) throw new Error('COORD is still starting.');
       switch (action) {
         case 'state':
-          return { ok: true, value: service.getState() };
-        case 'refresh':
-          await service.refresh();
           break;
-        case 'pair': {
+        case 'host':
+        case 'join': {
           if (
-            !safeStorage.isEncryptionAvailable() ||
-            (process.platform === 'linux' &&
-              safeStorage.getSelectedStorageBackend() === 'basic_text')
+            action === 'join' &&
+            (typeof value !== 'string' || value.length > 4096 || !value.trim())
           )
-            throw new Error('Unlock your system keychain before signing in.');
-          const pairing = await service.beginPairing();
-          await openPortal(pairing.url);
-          return { ok: true, value: { userCode: pairing.userCode, expiresAt: pairing.expiresAt } };
-        }
-        case 'website':
-          await openPortal(portalUrl);
-          break;
-        case 'project':
-          if (typeof value !== 'string' || value.length > 200) throw new Error('Choose a project.');
-          await service.selectProject(value);
-          break;
-        case 'folder': {
+            throw new Error('Paste an invite key first.');
           const picked = await dialog.showOpenDialog(window!, {
-            title: 'Choose your local project folder',
-            properties: ['openDirectory'],
+            title:
+              action === 'host'
+                ? 'Choose the project to share'
+                : 'Choose an empty folder for your project copy',
+            properties: ['openDirectory', 'createDirectory'],
           });
-          if (!picked.canceled && picked.filePaths[0])
-            await service.setFolder(await realpath(picked.filePaths[0]));
+          if (!picked.canceled && picked.filePaths[0]) {
+            const folder = await realpath(picked.filePaths[0]);
+            if (action === 'host') await controller.host(folder);
+            else await controller.join((value as string).trim(), folder);
+          }
           break;
         }
-        case 'send': {
+        case 'copy': {
+          const key = controller.getState().key;
+          if (!key) throw new Error('Start sharing to create an invite key.');
+          clipboard.writeText(key);
+          break;
+        }
+        case 'approve':
+        case 'reject':
+        case 'revoke':
           if (typeof value !== 'string' || value.length > 200)
-            throw new Error('Choose a teammate’s computer.');
-          const state = service.getState();
-          if (!state.folder) throw new Error('Choose your local project folder first.');
-          const picked = await dialog.showOpenDialog(window!, {
-            title: 'Select files to send',
-            defaultPath: state.folder,
-            properties: ['openFile', 'multiSelections'],
-          });
-          if (picked.canceled || !picked.filePaths.length) break;
-          const paths = picked.filePaths.map((path) => relative(state.folder!, path));
-          if (paths.some((path) => isAbsolute(path) || path === '..' || path.startsWith('../')))
-            throw new Error('Choose files inside your selected project folder.');
-          await service.sendFiles(paths, value);
+            throw new Error('Choose a connection request.');
+          if (action === 'approve') await controller.approve(value);
+          else if (action === 'reject') await controller.reject(value);
+          else await controller.revoke(value);
           break;
-        }
+        case 'invite':
+          await controller.invite();
+          break;
+        case 'disconnect':
+          await controller.disconnect();
+          break;
         case 'reveal': {
-          const received = service.getState().lastReceived;
-          if (!received) throw new Error('Receive files before opening their review folder.');
-          const error = await shell.openPath(received);
-          if (error) throw new Error('Could not open the review folder.');
+          const folder = controller.getState().folder;
+          if (!folder) throw new Error('Choose a folder first.');
+          const error = await shell.openPath(folder);
+          if (error) throw new Error('Could not open the project folder.');
           break;
         }
-        case 'receive':
-          if (typeof value !== 'string' || value.length > 200)
-            throw new Error('Choose a file transfer.');
-          await service.acceptTransfer(value);
+        case 'login':
+          if (value !== 'true' && value !== 'false') throw new Error('Invalid login preference.');
+          app.setLoginItemSettings({ openAtLogin: value === 'true' });
           break;
-        case 'integration':
-          if (value !== 'codex' && value !== 'claude') throw new Error('Choose Codex or Claude.');
-          await service.installIntegration(value);
-          break;
-        case 'logout':
-          await service.logout();
+        case 'quit':
+          app.quit();
           break;
         default:
           throw new Error('Unknown desktop action');
       }
-      return { ok: true, value: service.getState() };
+      return { ok: true, value: state() };
     } catch (error) {
-      // Service errors are deliberately user-safe. Never serialize stack traces or request objects.
-      const message = error instanceof Error ? error.message : 'The operation could not finish.';
-      return { ok: false, error: message.slice(0, 400) };
+      return {
+        ok: false,
+        error: (error instanceof Error ? error.message : 'The operation could not finish.').slice(
+          0,
+          400,
+        ),
+      };
     }
   });
 }
@@ -144,17 +134,43 @@ async function createWindow() {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
   window.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  window.on('close', (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      window?.hide();
+    }
+  });
   window.on('closed', () => {
     window = null;
   });
   await window.loadFile(uiPath);
 }
+function showWindow() {
+  if (window) {
+    window.show();
+    window.focus();
+  } else void createWindow();
+}
+function createTray() {
+  const icon = nativeImage.createFromDataURL(
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVQ4T2NkYGD4z0ABYBxVMGoAAzAMBgAAT8wBH2vQGZkAAAAASUVORK5CYII=',
+  );
+  icon.setTemplateImage(true);
+  tray = new Tray(icon);
+  tray.setTitle('COORD');
+  tray.setToolTip('COORD — local project collaboration');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open COORD', click: showWindow },
+      { type: 'separator' },
+      { label: 'Quit COORD', click: () => app.quit() },
+    ]),
+  );
+  tray.on('click', showWindow);
+}
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', () => {
-    window?.show();
-    window?.focus();
-  });
+  app.on('second-instance', showWindow);
   void app
     .whenReady()
     .then(async () => {
@@ -162,8 +178,12 @@ else {
         callback(false),
       );
       session.defaultSession.setPermissionCheckHandler(() => false);
-      controller = await createDesktopController({
-        portalUrl,
+      if (
+        !safeStorage.isEncryptionAvailable() ||
+        (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')
+      )
+        throw new Error('Unlock your system keychain before opening COORD.');
+      controller = await createPeerSession({
         stateDirectory: app.getPath('userData'),
         protect: {
           encryptString(value) {
@@ -179,42 +199,33 @@ else {
             return safeStorage.decryptString(value);
           },
         },
-        onStateChanged: (state) => {
-          window?.webContents.send('coord:state', state);
+        onStateChanged: () => {
+          if (controller) window?.webContents.send('coord:state', state());
         },
-        ...(process.platform === 'win32'
-          ? {}
-          : {
-              integration: {
-                command: '/usr/bin/env',
-                args: [
-                  'ELECTRON_RUN_AS_NODE=1',
-                  process.execPath,
-                  join(__dirname, 'coord-mcp.cjs'),
-                ],
-              },
-            }),
+        integration: {
+          command: '/usr/bin/env',
+          args: ['ELECTRON_RUN_AS_NODE=1', process.execPath, join(__dirname, 'local-mcp.cjs')],
+        },
       });
       registerIpc();
+      createTray();
       await createWindow();
-      app.on('activate', () => {
-        if (!window) void createWindow();
-      });
+      app.on('activate', showWindow);
     })
     .catch(() => {
       dialog.showErrorBox(
         'COORD could not start',
-        'COORD could not open its local state. Check that your user account can write to its application support folder, then reopen the app.',
+        'COORD could not unlock its protected local state. Unlock your system keychain and check that your account can write to its application support folder, then reopen the app.',
       );
       app.quit();
     });
   app.on('before-quit', (event) => {
-    if (quitting || !controller) return;
+    if (quitting) return;
     event.preventDefault();
     quitting = true;
-    void controller.dispose().finally(() => app.quit());
+    void Promise.resolve(controller?.dispose()).finally(() => app.quit());
   });
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
+    /* The tray keeps the shared project online. */
   });
 }

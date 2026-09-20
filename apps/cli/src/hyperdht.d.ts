@@ -8,7 +8,7 @@ declare module 'hyperdht' {
   }
   export default class DHT extends EventEmitter {
     constructor(options?: Record<string, unknown>);
-    static keyPair(): { publicKey: Buffer; secretKey: Buffer };
+    static keyPair(seed?: Buffer): { publicKey: Buffer; secretKey: Buffer };
     createServer(listener: (socket: Duplex) => void): DhtServer;
     connect(publicKey: Buffer): Duplex;
     destroy(options?: { force?: boolean }): Promise<void>;

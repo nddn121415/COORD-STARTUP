@@ -12,145 +12,129 @@
     <script defer src="app.js"></script>
   </head>
   <body>
-    <aside class="sidebar">
-      <div class="brand">
-        <span class="brand-icon">c</span> COORD <span class="desktop-label">desktop</span>
-      </div>
-      <div class="sidebar-label">YOUR WORKSPACE</div>
-      <button id="overview" class="nav-item active"><span>◈</span> Collaboration</button>
-      <button id="website" class="nav-item"><span>↗</span> Open website</button>
-      <div class="project-label">
-        <span class="sidebar-label">PROJECTS</span
-        ><button
-          id="refresh"
-          class="icon-button"
-          title="Refresh projects"
-          aria-label="Refresh projects"
-        >
-          ↻
-        </button>
-      </div>
-      <div id="projects" class="projects">
-        <p class="sidebar-note">Sign in to see your projects.</p>
-      </div>
-      <div class="sidebar-bottom">
-        <span id="connection-dot" class="status-dot"></span
-        ><span id="connection-label">Not connected</span
-        ><button id="logout" class="text-button" hidden>Sign out</button>
+    <aside>
+      <div class="brand"><b>c</b> COORD</div>
+      <p class="eyebrow">LOCAL COLLABORATION</p>
+      <div class="nav">↔ &nbsp; Shared project</div>
+      <p class="sidebar-copy">Your folder.<br />Your agents.<br />Your people.</p>
+      <div class="bottom">
+        <label><input id="login" type="checkbox" /> Start at login</label>
+        <p>Closing this window keeps COORD running in your menu bar.</p>
+        <button id="quit" class="text">Quit COORD</button>
       </div>
     </aside>
     <main>
-      <header class="topbar">
-        <span
-          >Workspace <span class="slash">/</span> <strong id="breadcrumb">Get started</strong></span
-        ><span class="preview-badge">EARLY ACCESS</span>
+      <header>
+        <span>Workspace / <strong>Shared project</strong></span
+        ><span class="badge">EARLY ACCESS · 0.5</span>
       </header>
       <div class="content">
-        <div class="page-heading">
+        <div class="heading">
           <div>
-            <p class="eyebrow">BETTER TOGETHER</p>
-            <h1 id="heading">Your team. In sync.</h1>
-            <p id="subheading" class="muted">Bring your local work into the conversation.</p>
+            <p class="eyebrow">WORK TOGETHER, FROM ANYWHERE</p>
+            <h1>Your project. Connected.</h1>
+            <p class="muted">Share a local folder directly with people you approve.</p>
           </div>
-          <span class="connection-pill" id="status-pill">Offline</span>
+          <span id="status" class="pill">Starting</span>
         </div>
         <div id="notice" role="status" aria-live="polite" hidden></div>
-        <section id="signin-panel" class="signin-panel">
-          <div class="signin-visual">
-            <span class="computer first">⌘</span><span class="connecting-line"></span
-            ><span class="computer second">↗</span>
-          </div>
-          <p class="eyebrow">ONE TEAM, DIFFERENT COMPUTERS</p>
-          <h2>Work together from where you are.</h2>
-          <p class="muted intro">
-            Connect your account, choose a project, and send selected files to a teammate. Every
-            incoming change lands in a separate folder for you to review.
-          </p>
-          <button id="pair" class="button primary">Connect your account <span>↗</span></button>
-          <p class="helper">
-            Sign in securely in your browser. Your local folder stays on this computer.
-          </p>
-          <div id="pairing" hidden>
-            <span>Confirm this code in your browser</span><strong id="pairing-code"></strong
-            ><span id="pairing-expiry"></span>
-          </div>
-        </section>
-        <section id="workspace-panel" hidden>
-          <div id="no-project" class="empty-card" hidden>
-            <span class="empty-icon">＋</span>
-            <h2>Create your first project</h2>
+        <section id="setup" class="columns">
+          <article class="card">
+            <span class="step">01 / START A PROJECT</span>
+            <h2>Bring your own folder.</h2>
             <p class="muted">
-              Open the website to create a project and invite a collaborator. Then refresh here.
+              Choose the project on this computer. Send your invite key to a teammate, then approve
+              their request.
             </p>
-            <button id="create-project" class="button primary">Open website ↗</button>
-          </div>
-          <div id="project-workspace">
-            <section class="folder-card">
-              <div class="folder-symbol">▤</div>
-              <div class="grow">
-                <p class="card-label">LOCAL PROJECT FOLDER</p>
-                <strong id="folder-name">Choose the folder you work in</strong>
-                <p id="folder-path" class="muted small">
-                  Your files stay local until you choose to send them.
-                </p>
-              </div>
-              <button id="folder" class="button secondary">Choose folder</button>
-            </section>
-            <div class="two-column">
-              <section class="card">
-                <div class="card-heading">
-                  <h2>Teammates’ computers</h2>
-                  <span id="device-count" class="count">0</span>
-                </div>
-                <p class="muted small">
-                  Select a computer, then choose the files you want to share.
-                </p>
-                <div id="devices" class="device-list"></div>
-                <button id="send" class="button primary full" disabled>
-                  Select files to send <span>↗</span>
-                </button>
-                <p class="helper">Only the files you select. No Git push or pull.</p>
-              </section>
-              <section class="card">
-                <div class="card-heading">
-                  <h2>Incoming files</h2>
-                  <span id="transfer-count" class="count">0</span>
-                </div>
-                <p class="muted small">You decide what comes into your workspace.</p>
-                <div id="transfers" class="transfer-list"></div>
-              </section>
-            </div>
-            <section id="received" class="received-card" hidden>
-              <span class="check">✓</span>
-              <div>
-                <h3>Files received. Ready for review.</h3>
-                <p class="muted small">
-                  Your project is unchanged. Compare the received files before copying changes you
-                  accept.
-                </p>
-                <code id="received-path"></code>
-                <p id="received-route" class="helper"></p>
-                <button id="reveal" class="button secondary">Open review folder</button>
-              </div>
-            </section>
-            <section class="agents-card">
-              <div>
-                <h3>Your coding agents</h3>
-                <p class="muted small">
-                  Connect an agent to an existing COORD coordination workspace.
-                </p>
-              </div>
-              <div class="agent-buttons">
-                <button id="codex" class="button secondary">Connect Codex</button
-                ><button id="claude" class="button secondary">Connect Claude</button>
-              </div>
-            </section>
-          </div>
+            <button id="host" class="primary">Choose folder & share →</button>
+          </article>
+          <article class="card">
+            <span class="step">02 / JOIN A TEAMMATE</span>
+            <h2>Have an invite key?</h2>
+            <p class="muted">
+              Paste it here and choose an empty folder for your local copy. Your teammate approves
+              the connection.
+            </p>
+            <label for="invite">Invite key</label
+            ><input
+              id="invite"
+              type="password"
+              autocomplete="off"
+              placeholder="Paste your teammate’s key"
+            /><button id="join" class="secondary">Choose folder & connect →</button>
+          </article>
         </section>
-        <footer>
-          <span class="footer-mark">↔</span> Selected files. Encrypted in transit. Reviewed before
-          use.
-        </footer>
+        <section id="workspace" hidden>
+          <article class="folder card">
+            <div class="folder-icon">▤</div>
+            <div class="grow">
+              <p class="eyebrow">YOUR LOCAL PROJECT</p>
+              <strong id="folder-name"></strong>
+              <p id="folder-path" class="muted small"></p>
+            </div>
+            <button id="reveal" class="secondary">Open folder</button
+            ><button id="disconnect" class="text">Disconnect</button>
+          </article>
+          <article id="invite-card" class="card compact" hidden>
+            <div class="grow">
+              <h3>Invite a teammate</h3>
+              <p class="muted small">
+                The key grants a connection request. Approve only people you expect.
+              </p>
+              <input id="share-key" type="password" readonly aria-label="Your invite key" />
+            </div>
+            <div>
+              <button id="copy" class="secondary">Copy invite key</button
+              ><button id="invite-refresh" class="text">Replace invite key</button>
+            </div>
+          </article>
+          <section id="requests-card" class="card" hidden>
+            <h2>Connection requests</h2>
+            <div id="requests"></div>
+          </section>
+          <div class="columns">
+            <article class="card">
+              <h2>Connected people</h2>
+              <div id="peers"></div>
+            </article>
+            <article class="card">
+              <h2>Your coding agents</h2>
+              <p id="integration" class="muted small"></p>
+              <p class="small muted">
+                Each connected agent session gets its own identity and can request an isolated
+                working folder through COORD tools. Open a fresh Codex or Claude session after
+                choosing a folder so it loads the project tools.
+              </p>
+            </article>
+          </div>
+          <article class="card">
+            <h2>Team activity</h2>
+            <div id="activity"></div>
+          </article>
+          <article class="card">
+            <h2>Shared files & reservations</h2>
+            <div id="conflicts" role="status" hidden></div>
+            <p class="muted small">
+              COORD agents reserve files and publish changes only if their starting version still
+              matches. Conflicting changes are refused.
+            </p>
+            <div id="files"></div>
+          </article>
+        </section>
+        <div class="safety">
+          <strong>How edits stay safe</strong>
+          <p>
+            COORD controls changes published through its tools. Other editors can still change local
+            files; those edits never silently overwrite a teammate’s newer version. Keep the host
+            online while collaborating. COORD sees activity reported through its tools; it does not
+            inspect an agent’s internal subagents or private conversations.
+          </p>
+          <p>
+            Source files only: up to 500 text files, 1 MiB each and 16 MiB total. Recognized
+            secrets, binary files, and build folders are excluded.
+          </p>
+        </div>
+        <footer>No account. No Git push or pull. An internet connection is required.</footer>
       </div>
     </main>
   </body>

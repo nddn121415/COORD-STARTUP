@@ -1,16 +1,17 @@
 import { contextBridge, ipcRenderer } from 'electron';
 const allowed = new Set([
   'state',
-  'refresh',
-  'pair',
-  'website',
-  'project',
-  'folder',
-  'send',
-  'receive',
+  'host',
+  'join',
+  'copy',
+  'approve',
+  'reject',
+  'revoke',
+  'invite',
+  'disconnect',
   'reveal',
-  'integration',
-  'logout',
+  'login',
+  'quit',
 ]);
 contextBridge.exposeInMainWorld(
   'coord',

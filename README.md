@@ -6,13 +6,15 @@ Codex and Claude Code stay local, in their existing workflows. COORD tracks task
 
 This is a functional developer prototype, with real PostgreSQL persistence, authenticated WebSockets, local Git observation and an official SDK MCP server. It is not a production identity service. Automated tests exercise two independent connectors and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
 
-## Desktop app and collaboration website
+## Local-first desktop app
 
-Open [COORD](https://coord-team.waledblack14.chatgpt.site), sign in, create a project and invite collaborators by email. Invitations appear when they sign in with that email; no invitation email is sent automatically yet.
+[**Download COORD for Mac (Apple silicon)**](https://github.com/nddn121415/COORD-STARTUP/releases/download/desktop-v0.5.0/COORD-0.5.0-mac-arm64.dmg)
 
-The [Mac desktop app](https://github.com/nddn121415/COORD-STARTUP/releases/tag/desktop-v0.4.0) includes its runtime. Sign in through your browser, choose a project and local folder, and use the app to connect Codex/Claude or share selected files. No Node installation, terminal commands, IP addresses or invitation files are required for this flow. Direct transfer is preferred, with client-side encrypted HTTPS delivery as a fallback. Incoming files remain staged for your review.
+**Choose a local folder, copy a connection key, and approve your teammate.** The desktop app runs in the menu bar, automatically synchronizes supported files through exclusive reservations and base-hash checks, and configures project-scoped Codex/Claude tools. It requires no website account or GitHub repository.
 
-This first installer targets Apple silicon and macOS 13+. It is ad-hoc signed and **not yet notarized**; production Apple signing is required before a smooth public launch. The website starts owner-private until its access is explicitly opened. Its account-based desktop adapter currently exposes five coordination tools; the original PostgreSQL service below retains its twelve-tool interface.
+Each connected MCP process can create its own isolated working directory, reserve files, and submit guarded changes. Overlapping reservations and stale publications are rejected; conflicting local edits are retained. Arbitrary shell/editor writes are not intercepted, and internal subagents sharing one MCP process are not automatically distinguished. Existing coding sessions may need a reload and the tool's normal trust/MCP approval.
+
+See the [two-Mac testing walkthrough and exact limits](docs/LOCAL_DESKTOP.md). The Mac build targets Apple silicon/macOS13+, includes its runtime, and is currently ad-hoc signed (not yet Apple-notarized). The original account-based collaboration website remains a private preview and is not required by the new desktop flow.
 
 ## Download and try file transfer
 
