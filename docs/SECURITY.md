@@ -2,7 +2,7 @@
 
 ## What the prototype enforces
 
-The connector initiates outbound WebSocket connections; it exposes no inbound internet service. MCP uses local stdio. The server has no remote command, terminal, file-content, agent wake or tool-execution endpoint. A message containing a shell command is stored and returned as inert untrusted data. Agent responses explicitly label coordination content as untrusted.
+The normal coordination connector initiates outbound WebSocket connections and exposes no inbound coordination service. An explicitly started `share-files` operation adds a short-lived authenticated HTTPS listener, loopback by default; external binding requires the sender to select an interface. MCP uses local stdio. The server has no remote command, terminal, file-content, agent wake or tool-execution endpoint. A message containing a shell command is stored and returned as inert untrusted data. Agent responses explicitly label coordination content as untrusted.
 
 Device credentials are random 256-bit opaque tokens, stored as SHA-256 hashes on the server with expiry and revocation fields. Requests derive user/device identity from the token, then validate project membership and session ownership. Device validity and membership are rechecked for requests and event delivery, so revocation stops an existing socket's access. Cross-project object references are rejected for task dependencies, facts, messages, conflicts and handoffs. Concurrent session registration cannot steal another device's session ID.
 
@@ -33,3 +33,9 @@ The control plane enforces authorization in its service layer; this prototype do
 Security regressions exercise cross-project access, foreign references, forged and racing session IDs, stolen/expired claims, unauthorized/stale handoffs, changed-payload idempotency, revoked tokens, path traversal, absolute paths, sensitive paths, symlink escape, oversized requests/events/snapshots, replay deduplication and malicious message text. Real PostgreSQL tests prove one concurrent claim winner. Process execution call sites are limited to local fixed Git inspection, development PostgreSQL lifecycle, and explicit test harnesses; no server-supplied message reaches a command runner.
 
 File-level overlap is advisory. It cannot establish code correctness, guarantee absence of conflicts, or prevent an agent from ignoring an announcement request. No automatic merge or writable-agent wake feature is present.
+
+## Explicit direct file-transfer boundary
+
+A local sender must select files and start sharing; a local recipient must explicitly accept a private invitation. No cloud event starts a transfer. Source/text bytes go directly to the receiver and never enter the control plane or GitHub. The invitation is a short-lived bearer capability containing a pinned certificate and endpoint; keep it in private files and deliver it through an authenticated channel. Anyone holding it can retrieve the selected snapshot until expiry or shutdown. It is not a user-identity-bound invitation.
+
+Files are read into a bounded snapshot and scanned before the sender listens. TLS trust and certificate pin verification precede the request's capability header. The receiver repeats path/content validation, verifies hashes, refuses ambiguous paths, and uses a new private staging directory with no executable permissions. It never overwrites project files or runs any received content. Secret detection is heuristic and does not make arbitrary source disclosure safe; send only files you intend the recipient to see. Direct transfer policy and current limits are detailed in [DIRECT_TRANSFER.md](DIRECT_TRANSFER.md).

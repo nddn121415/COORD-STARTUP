@@ -2,9 +2,17 @@
 
 **COORD makes your team's coding agents aware of each other's work.**
 
-Codex and Claude Code stay local, in their existing workflows. COORD tracks task ownership, intended files, observed Git changes, conflicts, structured project facts and handoffs. No custom IDE is required. Source files and transcripts stay on the laptop; the control plane receives coordination metadata.
+Codex and Claude Code stay local, in their existing workflows. COORD tracks task ownership, intended files, observed Git changes, conflicts, structured project facts and handoffs. No custom IDE is required. Source files and transcripts stay on the laptop by default; the control plane receives coordination metadata. Explicit file sharing sends selected source/text files directly to another computer over pinned HTTPS, into a review folder.
 
 This is a functional developer prototype, with real PostgreSQL persistence, authenticated WebSockets, local Git observation and an official SDK MCP server. It is not a production identity service. Automated tests exercise two independent connectors and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
+
+## How computers share
+
+**GitHub stores this product's source code. Git is never the live sharing transport.**
+
+Coordination uses authenticated WebSockets. The new `share-files` and `receive-files` commands transfer selected code directly between computers over encrypted HTTPS, without a Git push/pull or any file-content upload to COORD's server. Uncommitted files work too. Receiving stages a private copy for review and never applies or executes it automatically.
+
+Start with the [direct computer-to-computer walkthrough](docs/DIRECT_TRANSFER.md). This standalone transfer needs neither a database nor COORD login. It currently requires a reachable sender address (LAN/private VPN/direct endpoint); automatic internet NAT traversal is not implemented.
 
 ## Quickstart
 

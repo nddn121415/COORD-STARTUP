@@ -2,13 +2,13 @@
 
 ## Delivered
 
-COORD is a working metadata coordination service and local connector for Codex and Claude Code. It includes authenticated presence, durable tasks, exclusive leased claims, versioned task updates, intent/Git file conflicts, addressed messages, structured facts, transactional handoffs, reconnect/replay and idempotent writes. Normal interaction uses 12 official SDK MCP tools; CLI commands handle setup and diagnosis.
+COORD is a working metadata coordination service and local connector for Codex and Claude Code. It includes authenticated presence, durable tasks, exclusive leased claims, versioned task updates, intent/Git file conflicts, addressed messages, structured facts, transactional handoffs, reconnect/replay and idempotent writes. Normal interaction uses 12 official SDK MCP tools; CLI commands handle setup and diagnosis. Explicitly selected code/text snapshots can also travel directly between computers over pinned HTTPS, without Git or the control plane.
 
 Architecture and the directory tree are in [ARCHITECTURE.md](ARCHITECTURE.md). Exact local setup is in [README](../README.md). The [two-laptop runbook](DEMO.md) covers authenticated shared-server connectivity, overlapping tasks, messages, facts, handoffs and reconnect. [CODEX.md](CODEX.md) and [CLAUDE.md](CLAUDE.md) document reversible integration setup and the verified official interfaces.
 
 ## Implementation details
 
-Git observation uses native read-only Git commands and NUL-separated status, with debounced filesystem hints and periodic reconciliation. No source files or transcripts are uploaded. Paths are validated lexically and against local symlinks, including aliases to sensitive files.
+Git observation uses native read-only Git commands and NUL-separated status, with debounced filesystem hints and periodic reconciliation. The coordination connector uploads no source files or transcripts. Separate, explicit `share-files` / `receive-files` commands transfer selected source files directly to a peer. Paths are validated lexically and against local symlinks, including aliases to sensitive files.
 
 Conflict detection deterministically compares declared intent plus Git-observed paths among active sessions. Rename source and destination both participate. Read/write is informational; modify/modify warns; create/create, delete/write and rename/write are high severity. Conflicts and their resolution are durable events.
 
@@ -16,7 +16,7 @@ Task claims use database time, a unique task constraint and transactional projec
 
 Reconnect preserves the session and last processed sequence, retries pending requests with stable identity, and replays durable project events. Duplicate delivery is ignored by sequence. A graceful exit ends the session; restart then uses a fresh session. Project writes and their event sequence/idempotency record commit together.
 
-Authentication is random expiring device tokens with hashed server storage and project membership. No generic remote shell, command endpoint, writable-agent wake, source upload or transcript capture exists. Metadata path/secret heuristics, wire-size caps, bounded queues, rate limiting and adversarial regression tests enforce the prototype boundaries described in [SECURITY.md](SECURITY.md).
+Authentication is random expiring device tokens with hashed server storage and project membership. The control plane has no generic remote shell, command endpoint, writable-agent wake, source upload or transcript capture. The separate peer listener serves only a selected immutable snapshot behind a short-lived capability and certificate pin. Metadata path/secret heuristics, wire-size caps, bounded queues, rate limiting and adversarial regression tests enforce the prototype boundaries described in [SECURITY.md](SECURITY.md).
 
 ## Validation and known boundaries
 
@@ -26,6 +26,7 @@ Automated tests are not a claim that two physical laptops, a public TLS deployme
 
 Known prototype limitations:
 
+- Direct file transfers require a reachable LAN/VPN/direct endpoint, support UTF-8 text only, and stage snapshots for manual review. They do not provide NAT traversal, continuous editing, automatic merge or named-user-bound invitations. See [DIRECT_TRANSFER.md](DIRECT_TRANSFER.md).
 - Metadata is project-visible, including addressed messages. There are no private DMs or organization roles beyond membership.
 - Device provisioning is a trusted seed/admin operation. Production OAuth/SSO, refresh tokens, invitations and keychain storage are deferred. Tokens currently expire after 30 days.
 - Conflict checks are advisory and exact-path based. No symbol/hunk/semantic analysis or automatic merge is implemented.
@@ -49,7 +50,9 @@ Known prototype limitations:
 Verified on macOS arm64 with Node.js 24.18.0, pnpm 11.19.0 and real PostgreSQL 18 binaries:
 
 - `pnpm install --frozen-lockfile`: passed.
-- `pnpm verify`: passed formatting, ESLint, strict TypeScript, bundled build, **86 tests across 16 files** (71 unit, 13 database/security/integration, 2 E2E).
+- `pnpm verify`: passed formatting, ESLint, strict TypeScript, bundled build, **102 tests across 19 files** (87 unit, 13 database/security/integration, 2 E2E).
+- Built peer CLI in two separate temporary ordinary folders: exact-byte HTTPS transfer, verified hashes, no Git/control plane, no checkout overwrite and no token output: passed.
+- Independent peer security tests cover malformed manifests, oversized responses, substituted certificates, redirects, expiry, symlinks and staged file permissions. Invitation FIFO blocking and unbounded reads were fixed; the public-permissions test explicitly sets its fixture mode independently of process umask.
 - Fresh local cluster: `pnpm db:local`, `pnpm db:migrate`, `pnpm db:seed`, and `pnpm demo:token`: passed.
 - Built `dist/control-plane.js`: started and served database health and authenticated operations.
 - Built CLI from a separate temporary Git checkout: login, join, Codex/Claude config install, doctor, cursor, MCP discovery/call, uninstall, leave and logout: passed. Actual user agent configuration was not changed.

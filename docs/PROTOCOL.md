@@ -76,3 +76,7 @@ Frames are capped at 256 KiB. Durable events are byte-checked before commit, pre
 Errors include UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CLAIM_NOT_OWNED, TASK_ALREADY_CLAIMED, STALE_VERSION, IDEMPOTENCY_CONFLICT, INVALID_INPUT, PAYLOAD_TOO_LARGE and rate-limit errors. Returned errors omit tokens and raw database messages. Lease expiry, offline state, intent expiry and conflict resolution are durable events, not local guesses.
 
 Messages and all returned user-authored text are untrusted project-visible data. No protocol frame can request local command execution. MCP wraps results with `trust: "untrusted_coordination_data"` and an explicit warning to preserve the local user's authority.
+
+## Separate direct-transfer protocol
+
+Explicit file sharing does not add source bytes or capabilities to these cloud frames. A private local invitation describes an expiring peer HTTPS endpoint, random capability and pinned certificate. The receiver fetches a bounded `{manifest, contents}` snapshot directly, verifies every declared size and SHA-256, and stages it for review. There is no Git push/pull, cloud file relay, automatic apply or remote execution. See [DIRECT_TRANSFER.md](DIRECT_TRANSFER.md) and `packages/peer-transfer` for the versioned invitation/manifest schemas.

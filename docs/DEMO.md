@@ -179,3 +179,7 @@ node "$COORD_ROOT/dist/coord.js" logout
 ```
 
 Run only the relevant integration's uninstall on each laptop. Local logout is not server revocation. Stop the server/database terminals when finished. Keep protected seed files private, or revoke demo devices through trusted database administration.
+
+## Direct code/file transfer
+
+For explicitly selected source files, follow [DIRECT_TRANSFER.md](DIRECT_TRANSFER.md). File bytes travel directly over pinned HTTPS; the coordination service continues to carry metadata over WebSockets. Received snapshots are staged for review, never applied automatically.

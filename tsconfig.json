@@ -20,7 +20,8 @@
       "@coord/mcp-server": ["packages/mcp-server/src/index.ts"],
       "@coord/adapter-codex": ["packages/adapters/codex/src/index.ts"],
       "@coord/adapter-claude": ["packages/adapters/claude/src/index.ts"],
-      "@coord/control-plane": ["apps/control-plane/src/index.ts"]
+      "@coord/control-plane": ["apps/control-plane/src/index.ts"],
+      "@coord/peer-transfer": ["packages/peer-transfer/src/index.ts"]
     }
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "*.ts"]

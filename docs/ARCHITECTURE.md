@@ -1,6 +1,6 @@
 # Architecture
 
-COORD is one control-plane process backed by PostgreSQL, plus one local connector per active coding-agent process. The CLI handles setup and diagnosis. Normal work happens through MCP tools inside Codex or Claude Code.
+COORD is one control-plane process backed by PostgreSQL, plus one local connector per active coding-agent process. The CLI handles setup and diagnosis. Normal coordination happens through MCP tools inside Codex or Claude Code. Optional explicit file transfers use a separate direct HTTPS path between computers; they never use Git/GitHub or the control plane for file bytes.
 
 ```mermaid
 flowchart LR
@@ -12,6 +12,7 @@ flowchart LR
   A -->|outbound authenticated WSS| Server[COORD control plane]
   B -->|outbound authenticated WSS| Server
   Server --> PG[(PostgreSQL)]
+  PeerA[Sender file snapshot] -->|direct pinned HTTPS| PeerB[Receiver private review folder]
 ```
 
 ## Repository ownership and modules
@@ -22,6 +23,7 @@ apps/
   cli/                 setup, credentials, binding, diagnostics, daemon and MCP entry
 packages/
   protocol/            Zod wire/tool schemas, safe metadata paths and limits
+  peer-transfer/       explicit direct HTTPS snapshots, certificate pins, private staging
   conflict-engine/     ConflictAnalyzer interface and deterministic file analyzer
   memory/              fact/handoff input types and trust notice
   connector/           Git + presence + lease/intent renewal + private session state
@@ -62,3 +64,9 @@ These are advisory possible conflicts. COORD neither blocks edits nor automatica
 ## Extensibility
 
 `ConflictAnalyzer` can later accept symbol/hunk analyzers behind the same candidate interface. Protocol v1 is explicitly versioned. Structured facts and handoffs carry provenance. Richer Codex App Server, OpenCode, Cursor and hosted authentication adapters are deferred until the file-overlap behavior is validated.
+
+## Direct peer file snapshots
+
+`packages/peer-transfer` is independent of the coordination database and Git transport. `coord share-files` snapshots only selected regular UTF-8 files, rejects sensitive paths/content and symlinks, and starts a bounded expiring authenticated HTTPS listener. Its private invitation carries the endpoint, certificate pin, certificate, capability and expiry; no source contents. The receiver explicitly runs `coord receive-files`, verifies TLS and file digests and stages a new private review directory. No source is sent to the cloud or applied to a checkout automatically. See [DIRECT_TRANSFER.md](DIRECT_TRANSFER.md).
+
+This changes the original metadata-only prototype by adding an explicit opt-in file channel. Normal Git observation still never reads or uploads source content. The direct listener is loopback-only unless the sender explicitly chooses a reachable interface; it authenticates every transfer request. Automatic NAT traversal, peer discovery and continuous edit synchronization are future work.

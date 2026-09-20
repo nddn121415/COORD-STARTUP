@@ -1,0 +1,12 @@
+{
+  "name": "@coord/peer-transfer",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@coord/git-intel": "workspace:*",
+    "@coord/protocol": "workspace:*",
+    "selfsigned": "^5.2.0",
+    "zod": "^3.25.76"
+  }
+}

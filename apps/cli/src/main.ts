@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { registerPeerCommands } from './peer.js';
 import { readFile, rm, appendFile, mkdir, stat, lstat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -26,10 +27,10 @@ import {
 } from '@coord/adapter-claude';
 const program = new Command()
   .name('coord')
-  .description('Local metadata coordination for coding agents')
+  .description('Agent coordination and explicit direct computer-to-computer file transfers')
   .version('0.1.0');
 program
-  .option('--repo <path>', 'Git checkout', process.cwd())
+  .option('--repo <path>', 'Local project directory (Git checkout for coordination)', process.cwd())
   .option('--agent <kind>', 'codex, claude, or other', 'other');
 const output = (value: unknown): void => {
   process.stdout.write(JSON.stringify(value, null, 2) + '\n');
@@ -85,7 +86,8 @@ program
         'coord install-integration codex --repo /path/to/checkout',
         'coord install-integration claude --repo /path/to/checkout',
       ],
-      privacy: 'Only coordination metadata is sent; source files remain local.',
+      privacy:
+        'Coordination sends metadata only. Explicit share-files transfers selected files directly to a peer.',
     }),
   );
 program
@@ -390,6 +392,7 @@ program
       );
     else throw new Error('Supported integrations: codex, claude');
   });
+registerPeerCommands(program, () => options().repo, output);
 await program.parseAsync().catch((error) => {
   process.stderr.write(`COORD: ${error instanceof Error ? error.message : 'Operation failed'}\n`);
   process.exitCode = 1;
