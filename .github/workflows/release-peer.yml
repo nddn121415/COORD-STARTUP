@@ -1,0 +1,28 @@
+name: Release file-transfer tester
+on:
+  push:
+    tags:
+      - 'peer-v*'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+      - run: pnpm package:peer
+      - run: pnpm check:peer-package
+      - name: Publish tested download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" dist/coord-peer.zip dist/coord-peer.zip.sha256 --verify-tag --title "COORD file-transfer tester $RELEASE_TAG" --notes-file distribution/README.txt

@@ -6,6 +6,20 @@ Codex and Claude Code stay local, in their existing workflows. COORD tracks task
 
 This is a functional developer prototype, with real PostgreSQL persistence, authenticated WebSockets, local Git observation and an official SDK MCP server. It is not a production identity service. Automated tests exercise two independent connectors and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
 
+## Download and try file transfer
+
+[**Download the file-transfer tester**](https://github.com/nddn121415/COORD-STARTUP/releases/latest/download/coord-peer.zip) · [Releases](https://github.com/nddn121415/COORD-STARTUP/releases)
+
+1. Install [Node.js](https://nodejs.org) 22.18+ (24 recommended) if needed.
+2. Download and unzip `coord-peer.zip`.
+3. On Mac, open **Test COORD.command**. Alternatively, open Terminal in the extracted folder and run `node coord-peer.cjs demo`.
+
+The demo transfers a sample file over real encrypted HTTPS, verifies it, and cleans up. It needs no Git, pnpm, account or database and does not touch your project. The download includes both send/receive commands and a short `README.txt` for testing with a second computer. macOS may block the unsigned launcher; the Terminal command works without changing system security settings. macOS/Linux are the validated targets.
+
+This download tests **file transfer**, not the full agent coordination system. Two-computer transfers need a reachable LAN/VPN address. The complete Codex/Claude coordination setup is below.
+
+Already developing this repository? Run `pnpm demo:peer`. To build and check the download, run `pnpm package:peer` then `pnpm check:peer-package`.
+
 ## How computers share
 
 **GitHub stores this product's source code. Git is never the live sharing transport.**

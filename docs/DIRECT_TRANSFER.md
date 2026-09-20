@@ -9,6 +9,10 @@ Git is used locally to observe changes for coordination. GitHub is where COORD's
 
 This is an explicit snapshot transfer, not continuous shared editing. The receiver gets a new private review folder. Nothing is automatically merged, applied to the checkout, opened as a program or executed.
 
+## Easy download
+
+For testing without a source checkout, download [coord-peer.zip](https://github.com/nddn121415/COORD-STARTUP/releases/latest/download/coord-peer.zip), extract it, and run `node coord-peer.cjs demo` (Node.js required). Mac users can open `Test COORD.command`. The included `README.txt` explains two-computer use. For all commands below, the standalone equivalent is `node /path/to/coord-peer.cjs` in place of `node "$COORD_ROOT/dist/coord.js"`.
+
 ## Quick local proof
 
 Build COORD once:

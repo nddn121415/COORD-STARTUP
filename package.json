@@ -23,7 +23,11 @@
     "db:seed": "node --import tsx --env-file-if-exists=.env apps/control-plane/src/seed.ts",
     "db:local": "node --import tsx scripts/local-postgres.ts",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm test",
-    "demo:token": "node --import tsx scripts/demo-token.ts"
+    "demo:token": "node --import tsx scripts/demo-token.ts",
+    "build:peer": "tsup --config tsup.peer.config.ts",
+    "package:peer": "pnpm build:peer && node --import tsx scripts/package-peer.ts",
+    "demo:peer": "pnpm build:peer && node dist/peer/coord-peer.cjs demo",
+    "check:peer-package": "node --import tsx scripts/check-peer-package.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
