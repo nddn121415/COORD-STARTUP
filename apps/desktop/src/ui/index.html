@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>COORD</title>
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-icon">c</span> COORD <span class="desktop-label">desktop</span>
+      </div>
+      <div class="sidebar-label">YOUR WORKSPACE</div>
+      <button id="overview" class="nav-item active"><span>◈</span> Collaboration</button>
+      <button id="website" class="nav-item"><span>↗</span> Open website</button>
+      <div class="project-label">
+        <span class="sidebar-label">PROJECTS</span
+        ><button
+          id="refresh"
+          class="icon-button"
+          title="Refresh projects"
+          aria-label="Refresh projects"
+        >
+          ↻
+        </button>
+      </div>
+      <div id="projects" class="projects">
+        <p class="sidebar-note">Sign in to see your projects.</p>
+      </div>
+      <div class="sidebar-bottom">
+        <span id="connection-dot" class="status-dot"></span
+        ><span id="connection-label">Not connected</span
+        ><button id="logout" class="text-button" hidden>Sign out</button>
+      </div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <span
+          >Workspace <span class="slash">/</span> <strong id="breadcrumb">Get started</strong></span
+        ><span class="preview-badge">EARLY ACCESS</span>
+      </header>
+      <div class="content">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">BETTER TOGETHER</p>
+            <h1 id="heading">Your team. In sync.</h1>
+            <p id="subheading" class="muted">Bring your local work into the conversation.</p>
+          </div>
+          <span class="connection-pill" id="status-pill">Offline</span>
+        </div>
+        <div id="notice" role="status" aria-live="polite" hidden></div>
+        <section id="signin-panel" class="signin-panel">
+          <div class="signin-visual">
+            <span class="computer first">⌘</span><span class="connecting-line"></span
+            ><span class="computer second">↗</span>
+          </div>
+          <p class="eyebrow">ONE TEAM, DIFFERENT COMPUTERS</p>
+          <h2>Work together from where you are.</h2>
+          <p class="muted intro">
+            Connect your account, choose a project, and send selected files to a teammate. Every
+            incoming change lands in a separate folder for you to review.
+          </p>
+          <button id="pair" class="button primary">Connect your account <span>↗</span></button>
+          <p class="helper">
+            Sign in securely in your browser. Your local folder stays on this computer.
+          </p>
+          <div id="pairing" hidden>
+            <span>Confirm this code in your browser</span><strong id="pairing-code"></strong
+            ><span id="pairing-expiry"></span>
+          </div>
+        </section>
+        <section id="workspace-panel" hidden>
+          <div id="no-project" class="empty-card" hidden>
+            <span class="empty-icon">＋</span>
+            <h2>Create your first project</h2>
+            <p class="muted">
+              Open the website to create a project and invite a collaborator. Then refresh here.
+            </p>
+            <button id="create-project" class="button primary">Open website ↗</button>
+          </div>
+          <div id="project-workspace">
+            <section class="folder-card">
+              <div class="folder-symbol">▤</div>
+              <div class="grow">
+                <p class="card-label">LOCAL PROJECT FOLDER</p>
+                <strong id="folder-name">Choose the folder you work in</strong>
+                <p id="folder-path" class="muted small">
+                  Your files stay local until you choose to send them.
+                </p>
+              </div>
+              <button id="folder" class="button secondary">Choose folder</button>
+            </section>
+            <div class="two-column">
+              <section class="card">
+                <div class="card-heading">
+                  <h2>Teammates’ computers</h2>
+                  <span id="device-count" class="count">0</span>
+                </div>
+                <p class="muted small">
+                  Select a computer, then choose the files you want to share.
+                </p>
+                <div id="devices" class="device-list"></div>
+                <button id="send" class="button primary full" disabled>
+                  Select files to send <span>↗</span>
+                </button>
+                <p class="helper">Only the files you select. No Git push or pull.</p>
+              </section>
+              <section class="card">
+                <div class="card-heading">
+                  <h2>Incoming files</h2>
+                  <span id="transfer-count" class="count">0</span>
+                </div>
+                <p class="muted small">You decide what comes into your workspace.</p>
+                <div id="transfers" class="transfer-list"></div>
+              </section>
+            </div>
+            <section id="received" class="received-card" hidden>
+              <span class="check">✓</span>
+              <div>
+                <h3>Files received. Ready for review.</h3>
+                <p class="muted small">
+                  Your project is unchanged. Compare the received files before copying changes you
+                  accept.
+                </p>
+                <code id="received-path"></code>
+                <p id="received-route" class="helper"></p>
+                <button id="reveal" class="button secondary">Open review folder</button>
+              </div>
+            </section>
+            <section class="agents-card">
+              <div>
+                <h3>Your coding agents</h3>
+                <p class="muted small">
+                  Connect an agent to an existing COORD coordination workspace.
+                </p>
+              </div>
+              <div class="agent-buttons">
+                <button id="codex" class="button secondary">Connect Codex</button
+                ><button id="claude" class="button secondary">Connect Claude</button>
+              </div>
+            </section>
+          </div>
+        </section>
+        <footer>
+          <span class="footer-mark">↔</span> Selected files. Encrypted in transit. Reviewed before
+          use.
+        </footer>
+      </div>
+    </main>
+  </body>
+</html>

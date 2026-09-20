@@ -4,3 +4,7 @@ pnpm-lock.yaml
 .coord
 coverage
 .pnpm-store
+
+apps/portal/
+apps/desktop/dist/
+apps/desktop/release/

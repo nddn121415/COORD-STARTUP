@@ -6,6 +6,14 @@ Codex and Claude Code stay local, in their existing workflows. COORD tracks task
 
 This is a functional developer prototype, with real PostgreSQL persistence, authenticated WebSockets, local Git observation and an official SDK MCP server. It is not a production identity service. Automated tests exercise two independent connectors and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
 
+## Desktop app and collaboration website
+
+Open [COORD](https://coord-team.waledblack14.chatgpt.site), sign in, create a project and invite collaborators by email. Invitations appear when they sign in with that email; no invitation email is sent automatically yet.
+
+The [Mac desktop app](https://github.com/nddn121415/COORD-STARTUP/releases/tag/desktop-v0.4.0) includes its runtime. Sign in through your browser, choose a project and local folder, and use the app to connect Codex/Claude or share selected files. No Node installation, terminal commands, IP addresses or invitation files are required for this flow. Direct transfer is preferred, with client-side encrypted HTTPS delivery as a fallback. Incoming files remain staged for your review.
+
+This first installer targets Apple silicon and macOS 13+. It is ad-hoc signed and **not yet notarized**; production Apple signing is required before a smooth public launch. The website starts owner-private until its access is explicitly opened. Its account-based desktop adapter currently exposes five coordination tools; the original PostgreSQL service below retains its twelve-tool interface.
+
 ## Download and try file transfer
 
 [**Download the file-transfer tester**](https://github.com/nddn121415/COORD-STARTUP/releases/latest/download/coord-peer.zip) · [Releases](https://github.com/nddn121415/COORD-STARTUP/releases)

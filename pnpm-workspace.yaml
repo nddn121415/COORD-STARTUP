@@ -3,6 +3,9 @@ packages:
   - packages/*
   - packages/adapters/*
 allowBuilds:
+  electron: true
+  sharp: true
+  workerd: true
   esbuild: true
   embedded-postgres: true
   '@embedded-postgres/darwin-arm64': true

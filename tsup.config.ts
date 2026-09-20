@@ -9,6 +9,6 @@ export default defineConfig({
   platform: 'node',
   target: 'node22',
   sourcemap: true,
-  clean: true,
+  clean: ['*.js', '*.js.map'],
   noExternal: [/^@coord\//],
 });

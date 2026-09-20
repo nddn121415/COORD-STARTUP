@@ -50,10 +50,11 @@ function bridge(local: Socket, peer: Duplex, active: Set<Duplex>) {
 export async function prepareNetworkTransfer(
   options: { repoRoot: string; paths: string[]; ttlSeconds?: number },
   network: NetworkOptions = {},
+  existingTransfer?: Awaited<ReturnType<typeof prepareTransfer>>,
 ) {
   // The existing authenticated TLS endpoint stays on loopback. DHT streams can
   // reach ONLY this fixed endpoint, never arbitrary local services.
-  const transfer = await prepareTransfer(options);
+  const transfer = existingTransfer ?? (await prepareTransfer(options));
   const target = new URL(transfer.invitation.url);
   const node = new DHT(network);
   node.on('error', () => {});

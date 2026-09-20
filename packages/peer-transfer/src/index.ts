@@ -247,6 +247,14 @@ export async function prepareTransfer(options: {
 
 export async function receiveTransfer(options: { invitation: unknown; destination: string }) {
   const invitation = validateInvitation(options.invitation);
+  return stageSnapshot(
+    await fetchSnapshot(invitation),
+    invitation.transfer_id,
+    options.destination,
+  );
+}
+export async function fetchSnapshot(input: unknown) {
+  const invitation = validateInvitation(input);
   const bytes = await new Promise<Buffer>((ok, fail) => {
     // The invitation cert is the ONLY trust anchor. Node authenticates TLS, then
     // checks this pin before any HTTP headers (including capability) are sent.
@@ -289,6 +297,11 @@ export async function receiveTransfer(options: { invitation: unknown; destinatio
     req.on('error', fail);
     req.end();
   });
+  return bytes;
+}
+export async function stageSnapshot(bytes: Buffer, transferId: string, outputDirectory: string) {
+  if (bytes.length > Math.ceil((transferLimits.totalBytes * 4) / 3) + 100_000)
+    throw new Error('Transfer response too large');
   const body = z
     .object({
       manifest: manifestSchema,
@@ -301,7 +314,7 @@ export async function receiveTransfer(options: { invitation: unknown; destinatio
   const manifest = body.manifest;
   uniquePaths(manifest.files.map((f) => f.path));
   if (
-    manifest.transfer_id !== invitation.transfer_id ||
+    manifest.transfer_id !== transferId ||
     body.contents.length !== manifest.files.length ||
     manifest.total_bytes !== manifest.files.reduce((sum, file) => sum + file.size, 0)
   )
@@ -318,7 +331,7 @@ export async function receiveTransfer(options: { invitation: unknown; destinatio
     scan(decoded);
     return decoded;
   });
-  let ancestor = resolve(options.destination);
+  let ancestor = resolve(outputDirectory);
   while (true) {
     try {
       if ((await lstat(ancestor)).isSymbolicLink())
@@ -329,8 +342,8 @@ export async function receiveTransfer(options: { invitation: unknown; destinatio
     if (dirname(ancestor) === ancestor) break;
     ancestor = dirname(ancestor);
   }
-  await mkdir(options.destination, { recursive: true, mode: 0o700 });
-  const destination = await realpath(options.destination);
+  await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
+  const destination = await realpath(outputDirectory);
   const temporary = await mkdtemp(join(destination, '.coord-receive-'));
   await chmod(temporary, 0o700);
   const directory = join(

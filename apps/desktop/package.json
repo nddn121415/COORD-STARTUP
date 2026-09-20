@@ -1,0 +1,74 @@
+{
+  "name": "@coord/desktop",
+  "productName": "COORD",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Direct collaboration for coding teams",
+  "author": "COORD",
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node --import tsx scripts/build.ts",
+    "start": "electron .",
+    "package": "pnpm build && electron-builder --mac zip dmg",
+    "package:dir": "pnpm build && electron-builder --mac --dir"
+  },
+  "dependencies": {
+    "@coord/peer-transfer": "workspace:*",
+    "@coord/adapter-codex": "workspace:*",
+    "@coord/adapter-claude": "workspace:*",
+    "@coord/connector": "workspace:*",
+    "@coord/protocol": "workspace:*",
+    "hyperdht": "6.34.0"
+  },
+  "devDependencies": {
+    "electron": "44.4.3",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.0"
+  },
+  "build": {
+    "appId": "dev.coord.desktop",
+    "productName": "COORD",
+    "directories": {
+      "output": "../../dist/desktop-release"
+    },
+    "files": [
+      "dist/**",
+      "package.json",
+      "node_modules/**"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "**/prebuilds/**"
+    ],
+    "npmRebuild": false,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "minimumSystemVersion": "13.0",
+      "hardenedRuntime": true,
+      "target": [
+        "zip",
+        "dmg"
+      ],
+      "artifactName": "COORD-${version}-mac-${arch}.${ext}",
+      "icon": "assets/icon.icns",
+      "identity": "-"
+    },
+    "dmg": {
+      "title": "Install COORD",
+      "contents": [
+        {
+          "x": 140,
+          "y": 180
+        },
+        {
+          "x": 420,
+          "y": 180,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}

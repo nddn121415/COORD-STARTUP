@@ -62,3 +62,9 @@ Verified on macOS arm64 with Node.js 24.18.0, pnpm 11.19.0 and real PostgreSQL 1
 - Independent adversarial review led to regression-tested fixes for oversized durable replay events, a concurrent session-binding race, symlink metadata escapes and credential-bearing parse diagnostics.
 
 The smoke-test server/database and private credentials were removed after validation so the documented first-run seed flow remains usable. CI is configured to run the same verify command; the hosted CI workflow itself was not executed here.
+
+## Account-based desktop experience
+
+The new website has durable projects, invitations, device approval, device revocation, and encrypted transfer delivery. The packaged Mac app includes its runtime, local folder selection, browser sign-in, collaborator devices, selected-file sending, received-file review and project-scoped Codex/Claude integration through a private local bridge. Its five-tool adapter connects to the hosted portal; the original twelve-tool PostgreSQL connector remains separately available.
+
+Validation added desktop encrypted-state/pairing/transfer tests, ciphertext corruption rejection, real socket/MCP subprocess calls, and portal authorization tests running the actual API against SQLite. Packaged Apple-silicon Electron launches and its bundled MCP entry were tested. The installer is ad-hoc signed only; Developer ID signing/notarization remain a production launch requirement. Browser-agent WebMCP tool registration is feature-detected but was not exercised in a supporting browser context. Local auth tests inject identity and do not prove hosted identity-header sanitization.

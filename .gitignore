@@ -8,3 +8,9 @@ coverage/
 *.log
 .DS_Store
 .pnpm-store/
+
+apps/portal/.wrangler/
+apps/portal/.vite/
+apps/portal/.next/
+apps/portal/*.tsbuildinfo
+apps/desktop/release/
