@@ -30,25 +30,26 @@
     "check:peer-package": "node --import tsx scripts/check-peer-package.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
-    "zod": "^3.25.76",
-    "pg": "^8.16.3",
-    "ws": "^8.18.3",
     "@iarna/toml": "^2.2.5",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "commander": "^14.0.0",
-    "selfsigned": "^5.2.0"
+    "hyperdht": "6.34.0",
+    "pg": "^8.16.3",
+    "selfsigned": "^5.2.0",
+    "ws": "^8.18.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.5",
     "@types/ws": "^8.18.1",
-    "typescript": "^5.9.3",
-    "tsx": "^4.20.6",
-    "tsup": "^8.5.0",
-    "vitest": "^3.2.4",
-    "prettier": "^3.6.2",
+    "embedded-postgres": "18.4.0-beta.17",
     "eslint": "^9.39.0",
+    "prettier": "^3.6.2",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0",
-    "embedded-postgres": "18.4.0-beta.17"
+    "vitest": "^3.2.4"
   }
 }

@@ -80,3 +80,5 @@ Messages and all returned user-authored text are untrusted project-visible data.
 ## Separate direct-transfer protocol
 
 Explicit file sharing does not add source bytes or capabilities to these cloud frames. A private local invitation describes an expiring peer HTTPS endpoint, random capability and pinned certificate. The receiver fetches a bounded `{manifest, contents}` snapshot directly, verifies every declared size and SHA-256, and stages it for review. There is no Git push/pull, cloud file relay, automatic apply or remote execution. See [DIRECT_TRANSFER.md](DIRECT_TRANSFER.md) and `packages/peer-transfer` for the versioned invitation/manifest schemas.
+
+Automatic peer invitations wrap the existing TLS invitation in `{version: 1, transport: "hyperdht", public_key, transfer}`. The receiver discovers that exact public key and carries the unchanged HTTPS protocol through the encrypted stream. The wrapper is private out-of-band data and is never a control-plane frame or public DHT record.

@@ -26,7 +26,7 @@ Automated tests are not a claim that two physical laptops, a public TLS deployme
 
 Known prototype limitations:
 
-- Direct file transfers require a reachable LAN/VPN/direct endpoint, support UTF-8 text only, and stage snapshots for manual review. They do not provide NAT traversal, continuous editing, automatic merge or named-user-bound invitations. See [DIRECT_TRANSFER.md](DIRECT_TRANSFER.md).
+- Direct file transfers support automatic public discovery and UDP hole punching with `--wifi`, support UTF-8 text only, and stage snapshots for manual review. Restrictive networks may fail because a hosted relay fallback is not included. Continuous editing, automatic merge and named-user-bound invitations are not implemented. See [DIRECT_TRANSFER.md](DIRECT_TRANSFER.md).
 - Metadata is project-visible, including addressed messages. There are no private DMs or organization roles beyond membership.
 - Device provisioning is a trusted seed/admin operation. Production OAuth/SSO, refresh tokens, invitations and keychain storage are deferred. Tokens currently expire after 30 days.
 - Conflict checks are advisory and exact-path based. No symbol/hunk/semantic analysis or automatic merge is implemented.
@@ -50,7 +50,8 @@ Known prototype limitations:
 Verified on macOS arm64 with Node.js 24.18.0, pnpm 11.19.0 and real PostgreSQL 18 binaries:
 
 - `pnpm install --frozen-lockfile`: passed.
-- `pnpm verify`: passed formatting, ESLint, strict TypeScript, bundled build, **102 tests across 19 files** (87 unit, 13 database/security/integration, 2 E2E).
+- `pnpm verify`: passed formatting, ESLint, strict TypeScript, bundled build, **105 tests across 20 files** (90 unit, 13 database/security/integration, 2 E2E).
+- Automatic networking: isolated DHT transfer and credential/pin/expiry rejection tests passed. Public discovery and sample transfer also passed from an extracted download on this Mac, using two local peers; this is not a physical cross-network test.
 - Built peer CLI in two separate temporary ordinary folders: exact-byte HTTPS transfer, verified hashes, no Git/control plane, no checkout overwrite and no token output: passed.
 - Independent peer security tests cover malformed manifests, oversized responses, substituted certificates, redirects, expiry, symlinks and staged file permissions. Invitation FIFO blocking and unbounded reads were fixed; the public-permissions test explicitly sets its fixture mode independently of process umask.
 - Fresh local cluster: `pnpm db:local`, `pnpm db:migrate`, `pnpm db:seed`, and `pnpm demo:token`: passed.

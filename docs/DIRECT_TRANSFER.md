@@ -43,9 +43,30 @@ node "$COORD_ROOT/dist/coord.js" --repo /absolute/path/to/receiver-project recei
 
 The receiver prints `hashes_verified: true`, `applied: false`, and a new staged directory under the receiver project's `.coord/inbox`. You can supply `--inbox /private/review-folder` to choose another staging parent. Review and compare the files before copying accepted changes into your working project.
 
-## Two different computers
+## Two different computers over ordinary Wi-Fi
 
-The receiver must be able to reach the sender. On the same LAN, use the sender's private IP; across the internet, use a reachable private VPN address or an intentionally configured direct endpoint. COORD does not currently provide NAT traversal, port forwarding automation or a TURN relay. Direct-only attempts fail if the computers cannot reach each other.
+With the download, the sender runs:
+
+```sh
+node coord-peer.cjs --repo /path/to/project share-files --file src/user.ts --wifi
+```
+
+Send the printed private invitation file to the recipient, who runs:
+
+```sh
+chmod 600 /path/to/invitation.json
+node coord-peer.cjs --repo /path/to/receiver-project receive-files --invite /path/to/invitation.json
+```
+
+No VPN, IP entry or port forwarding is required for this automatic mode. HyperDHT locates the sender by a fresh public key and attempts UDP hole punching through the routers. It can be used on the same internet-connected Wi-Fi or across different networks. Some guest, corporate or carrier networks block direct UDP connections; a hosted encrypted relay fallback is not included yet, so success on every network is not promised. This version still requires an internet connection for discovery even when both computers share a Wi-Fi network.
+
+The public discovery network learns connection metadata, including public addresses and the temporary public key. It does not receive file contents, the HTTPS token, certificate private key or the invitation file. The data connection is Noise-encrypted and carries the existing pinned-TLS transfer. The local bridge can reach only the specific loopback transfer endpoint; it is not a generic proxy. Authentication, snapshot limits, review staging and expiry are unchanged. Failure times out rather than silently uploading files to another service.
+
+`node coord-peer.cjs demo --wifi` exercises public discovery and encrypted transfer using two processes on one computer. Automated tests additionally use an isolated DHT network and reject tampered tokens, pins and expired invitations. These checks do not establish physical cross-network interoperability.
+
+## Manual direct HTTPS mode
+
+If you already know a reachable sender address, the original mode below remains available. A VPN is optional, not a requirement of COORD. This mode itself performs no discovery or NAT traversal.
 
 On Laptop A, replace `192.168.1.25` with its actual reachable address:
 

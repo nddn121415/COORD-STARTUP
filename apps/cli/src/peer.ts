@@ -4,6 +4,11 @@ import { lstat, mkdir, open } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { prepareTransfer, receiveTransfer } from '@coord/peer-transfer';
 import { coordHome } from '@coord/connector';
+import {
+  prepareNetworkTransfer,
+  receiveNetworkTransfer,
+  networkInvitationSchema,
+} from './peer-network.js';
 
 function integer(value: string): number {
   if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)))
@@ -90,6 +95,10 @@ export function registerPeerCommands(
       'Sender address reachable from the receiving computer',
       '127.0.0.1',
     )
+    .option(
+      '--wifi',
+      'Automatically find and connect peers over normal internet/Wi-Fi, without IP setup',
+    )
     .option('--port <port>', 'Listening port; 0 chooses an available port', integer, 0)
     .option('--ttl <seconds>', 'Invitation lifetime in seconds', integer, 300)
     .action(
@@ -100,20 +109,29 @@ export function registerPeerCommands(
         advertiseHost: string;
         port: number;
         ttl: number;
+        wifi?: boolean;
       }) => {
-        let transfer: Awaited<ReturnType<typeof prepareTransfer>>;
+        let transfer:
+          | Awaited<ReturnType<typeof prepareTransfer>>
+          | Awaited<ReturnType<typeof prepareNetworkTransfer>>;
         try {
-          transfer = await prepareTransfer({
-            repoRoot: resolve(repo()),
-            paths: opts.file,
-            host: opts.host,
-            advertiseHost: opts.advertiseHost,
-            port: opts.port,
-            ttlSeconds: opts.ttl,
-          });
+          transfer = opts.wifi
+            ? await prepareNetworkTransfer({
+                repoRoot: resolve(repo()),
+                paths: opts.file,
+                ttlSeconds: opts.ttl,
+              })
+            : await prepareTransfer({
+                repoRoot: resolve(repo()),
+                paths: opts.file,
+                host: opts.host,
+                advertiseHost: opts.advertiseHost,
+                port: opts.port,
+                ttlSeconds: opts.ttl,
+              });
         } catch {
           throw new Error(
-            'Cannot share files. Check selected paths, secret-file exclusions, size limits, bind address, port and lifetime.',
+            'Cannot share files. Check selected paths, secret-file exclusions, size limits, bind address, port and lifetime. Automatic Wi-Fi mode also needs internet and UDP peer connectivity.',
           );
         }
         const invitationPath = resolve(
@@ -128,12 +146,17 @@ export function registerPeerCommands(
             'Cannot save private invitation. Choose a new --invite-out path in a writable directory.',
           );
         }
+        const expiresAt =
+          'transfer' in transfer.invitation
+            ? transfer.invitation.transfer.expires_at
+            : transfer.invitation.expires_at;
         output({
+          connection: opts.wifi ? 'automatic-peer-discovery' : 'direct-https',
           sharing: true,
           file_count: transfer.manifest.files.length,
           total_bytes: transfer.manifest.total_bytes,
-          endpoint: transfer.address,
-          expires_at: transfer.invitation.expires_at,
+          ...(opts.wifi ? {} : { endpoint: transfer.address }),
+          expires_at: expiresAt,
           invitation_file: invitationPath,
           next: 'The invitation grants access until expiry. Send it through a secure channel. Keep this command running; Ctrl-C revokes access.',
         });
@@ -148,10 +171,7 @@ export function registerPeerCommands(
               done();
             });
           };
-          const timer = setTimeout(
-            stop,
-            Math.max(1, Date.parse(transfer.invitation.expires_at) - Date.now()),
-          );
+          const timer = setTimeout(stop, Math.max(1, Date.parse(expiresAt) - Date.now()));
           process.once('SIGINT', stop);
           process.once('SIGTERM', stop);
         });
@@ -168,10 +188,15 @@ export function registerPeerCommands(
       const invitation = await readInvitation(opts.invite);
       let result: Awaited<ReturnType<typeof receiveTransfer>>;
       try {
-        result = await receiveTransfer({
-          invitation,
-          destination: resolve(opts.inbox ?? join(repo(), '.coord', 'inbox')),
-        });
+        result = networkInvitationSchema.safeParse(invitation).success
+          ? await receiveNetworkTransfer(
+              invitation,
+              resolve(opts.inbox ?? join(repo(), '.coord', 'inbox')),
+            )
+          : await receiveTransfer({
+              invitation,
+              destination: resolve(opts.inbox ?? join(repo(), '.coord', 'inbox')),
+            });
       } catch {
         throw new Error(
           'Transfer failed. Check invitation validity, sender reachability, certificate pin, file policy, and writable inbox. No files were applied to your project.',

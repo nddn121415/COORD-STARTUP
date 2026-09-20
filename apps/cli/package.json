@@ -16,6 +16,7 @@
     "@coord/realtime-client": "workspace:*",
     "@coord/protocol": "workspace:*",
     "@iarna/toml": "^2.2.5",
-    "@coord/peer-transfer": "workspace:*"
+    "@coord/peer-transfer": "workspace:*",
+    "hyperdht": "6.34.0"
   }
 }

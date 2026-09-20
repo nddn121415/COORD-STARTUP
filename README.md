@@ -14,9 +14,11 @@ This is a functional developer prototype, with real PostgreSQL persistence, auth
 2. Download and unzip `coord-peer.zip`.
 3. On Mac, open **Test COORD.command**. Alternatively, open Terminal in the extracted folder and run `node coord-peer.cjs demo`.
 
+For an automatic internet-connectivity test, open **Test Wi-Fi.command** or run `node coord-peer.cjs demo --wifi`. This checks discovery between two processes on your computer, not two physical computers.
+
 The demo transfers a sample file over real encrypted HTTPS, verifies it, and cleans up. It needs no Git, pnpm, account or database and does not touch your project. The download includes both send/receive commands and a short `README.txt` for testing with a second computer. macOS may block the unsigned launcher; the Terminal command works without changing system security settings. macOS/Linux are the validated targets.
 
-This download tests **file transfer**, not the full agent coordination system. Two-computer transfers need a reachable LAN/VPN address. The complete Codex/Claude coordination setup is below.
+This download tests **file transfer**, not the full agent coordination system. Use `share-files --wifi --file path/to/file` for automatic discovery and connection over ordinary internet/Wi-Fi, without entering IPs or setting up a VPN. Restrictive networks can still block direct connectivity; there is no hosted fallback relay yet. The complete Codex/Claude coordination setup is below.
 
 Already developing this repository? Run `pnpm demo:peer`. To build and check the download, run `pnpm package:peer` then `pnpm check:peer-package`.
 
@@ -26,7 +28,7 @@ Already developing this repository? Run `pnpm demo:peer`. To build and check the
 
 Coordination uses authenticated WebSockets. The new `share-files` and `receive-files` commands transfer selected code directly between computers over encrypted HTTPS, without a Git push/pull or any file-content upload to COORD's server. Uncommitted files work too. Receiving stages a private copy for review and never applies or executes it automatically.
 
-Start with the [direct computer-to-computer walkthrough](docs/DIRECT_TRANSFER.md). This standalone transfer needs neither a database nor COORD login. It currently requires a reachable sender address (LAN/private VPN/direct endpoint); automatic internet NAT traversal is not implemented.
+Start with the [direct computer-to-computer walkthrough](docs/DIRECT_TRANSFER.md). This standalone transfer needs neither a database nor COORD login. The `--wifi` option uses public HyperDHT discovery and automatic UDP hole punching. Discovery exposes connection metadata, not your invitation token or source files. The original HTTPS mode remains available for explicitly reachable addresses.
 
 ## Quickstart
 

@@ -7,6 +7,7 @@ export default defineConfig({
   target: 'node22',
   clean: true,
   splitting: false,
-  noExternal: [/.*/],
+  noExternal: [/^@coord\//, 'commander', 'selfsigned', 'zod', 'ws', '@iarna/toml'],
+  external: ['hyperdht'],
   outExtension: () => ({ js: '.cjs' }),
 });
