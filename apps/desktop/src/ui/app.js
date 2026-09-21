@@ -31,6 +31,10 @@ function render(state) {
   $('workspace').hidden = !active;
   $('folder-name').textContent = (state.folder || '').split('/').filter(Boolean).pop() || '';
   $('folder-path').textContent = state.folder || '';
+  $('authority-notice').textContent =
+    state.authority === 'service'
+      ? 'Shared service · The creator’s computer can go offline. The service must remain online.'
+      : 'Temporary sharing · The host computer must stay online for this project.';
   $('invite-card').hidden = !state.key;
   $('share-key').value = state.key || '';
   $('integration').textContent =
@@ -72,7 +76,9 @@ function render(state) {
       $('peers'),
       state.status === 'waiting'
         ? 'Waiting for your teammate to approve this computer.'
-        : 'Share your invite key to connect a teammate.',
+        : state.key
+          ? 'Share your invite key to connect a teammate.'
+          : 'No other computers are currently connected.',
     );
   $('activity').replaceChildren();
   for (const activity of (state.activity || []).slice(-40).reverse())
@@ -119,6 +125,20 @@ async function act(action, value) {
 for (const action of ['host', 'copy', 'disconnect', 'reveal', 'quit'])
   $(action).onclick = () => act(action);
 $('invite-refresh').onclick = () => act('invite');
+$('invite').oninput = () => {
+  let computer = false;
+  try {
+    const key = $('invite').value.trim();
+    if (key.startsWith('coord1.') && key.length <= 4096)
+      computer =
+        JSON.parse(atob(key.slice(7).replace(/-/g, '+').replace(/_/g, '/'))).service !== true;
+  } catch {
+    /* Backend validates keys before connecting. */
+  }
+  $('key-help').textContent = computer
+    ? 'Computer invite: choose an empty folder for your local copy. The host approves your connection and must stay online.'
+    : 'Service keys grant project access without a separate approval. They expire and can be used once—keep yours private. Choose an existing project folder or an empty one; divergent local files are preserved for review.';
+};
 $('join').onclick = () => act('join', $('invite').value);
 $('login').onchange = () => {
   const enabled = $('login').checked;

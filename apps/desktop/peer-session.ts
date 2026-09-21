@@ -12,6 +12,7 @@ const hex = z.string().regex(/^[a-f0-9]{64}$/);
 const inviteSchema = z
   .object({
     version: z.literal(1),
+    service: z.literal(true).optional(),
     host: hex,
     project: z.string().uuid(),
     token: hex,
@@ -39,6 +40,7 @@ const snapshotSchema = z
 type Snapshot = z.infer<typeof snapshotSchema>;
 export type PeerState = {
   status: 'idle' | 'hosting' | 'connecting' | 'connected' | 'waiting' | 'offline';
+  authority?: 'computer' | 'service';
   folder?: string;
   key?: string;
   error?: string;
@@ -138,6 +140,10 @@ export type PeerOptions = {
   network?: { bootstrap: { host: string; port: number }[] };
   protect?: { encryptString(value: string): Buffer; decryptString(value: Buffer): string };
   pollMs?: number;
+  /** Trusted server-only mode. Redeeming an unexpired single-use capability authorizes a device. */
+  autoApproveInvitations?: boolean;
+  /** Disable observing/mirroring the headless server's provisioning folder. */
+  watchFolder?: boolean;
 };
 export async function createPeerSession(options: PeerOptions) {
   await mkdir(options.stateDirectory, { recursive: true, mode: 0o700 });
@@ -230,6 +236,7 @@ export async function createPeerSession(options: PeerOptions) {
     if (!saved.project) throw new Error('Choose a shared folder first');
     invitation = {
       version: 1,
+      ...(options.autoApproveInvitations ? { service: true as const } : {}),
       host: deviceId,
       project: saved.project,
       token: randomBytes(32).toString('hex'),
@@ -551,7 +558,7 @@ export async function createPeerSession(options: PeerOptions) {
       state.peers = payload.context.peers
         .filter((p) => p.id !== deviceId)
         .map((p) => ({ ...p, approved: true }));
-    if (saved.folder) {
+    if (saved.folder && options.watchFolder !== false) {
       const result = await reconcileSnapshot(saved.folder, lastSnapshot, saved.baseline);
       saved.baseline = result.baseline;
       state.conflicts = result.conflicts;
@@ -569,6 +576,11 @@ export async function createPeerSession(options: PeerOptions) {
       return;
     pollBusy = true;
     try {
+      if (options.watchFolder === false) {
+        await applySnapshot(await request('snapshot', { digest }, 'folder'));
+        state.error = undefined;
+        return;
+      }
       // Local files are drafts. A divergent draft never overwrites a newer shared revision.
       const local = await (await createWorkspaceGuard(saved.folder)).snapshot();
       const localMap = new Map(local.map((f) => [f.path, f]));
@@ -700,6 +712,37 @@ export async function createPeerSession(options: PeerOptions) {
             c.close();
             return;
           }
+          if (options.autoApproveInvitations) {
+            if (Object.keys(saved.approved).length >= 100) {
+              c.close();
+              return;
+            }
+            // Consume synchronously before persistence so two sockets cannot redeem one key.
+            invitation = undefined;
+            state.key = undefined;
+            const epoch = generation,
+              project = saved.project;
+            saved.approved[id] = data.name;
+            try {
+              await save();
+            } catch {
+              delete saved.approved[id];
+              c.close();
+              return;
+            }
+            if (epoch !== generation || saved.project !== project || c.socket.destroyed) {
+              c.close();
+              return;
+            }
+            authorized = true;
+            clearTimeout(timeout);
+            channels.get(id)?.close();
+            channels.set(id, c);
+            c.send({ type: 'approved' });
+            renewInvite();
+            emit();
+            return;
+          }
           clearTimeout(timeout);
           timeout = setTimeout(() => c.close(), 10 * 60_000);
           timeout.unref();
@@ -778,6 +821,7 @@ export async function createPeerSession(options: PeerOptions) {
       clearTimeout(timeout);
     }
     state.status = 'hosting';
+    state.authority = options.autoApproveInvitations ? 'service' : 'computer';
     state.folder = saved.folder;
     renewInvite();
     lastSnapshot = await guard.snapshot();
@@ -845,8 +889,9 @@ export async function createPeerSession(options: PeerOptions) {
         if (guest === c) guest = undefined;
         authenticated = false;
         state.status = 'offline';
-        state.error =
-          'Host unavailable or connection declined. Local changes are preserved. COORD will retry.';
+        state.error = saved.invitation?.service
+          ? 'COORD service unavailable or invitation already used. Local changes are preserved; reconnecting.'
+          : 'Host unavailable or connection declined. Local changes are preserved. COORD will retry.';
         for (const r of replies.values()) {
           clearTimeout(r.timer);
           r.reject(new Error('Host disconnected'));
@@ -873,6 +918,7 @@ export async function createPeerSession(options: PeerOptions) {
     node = new DHT({ ...options.network, keyPair: keys });
     node.on('error', () => {});
     state.folder = saved.folder;
+    state.authority = saved.invitation?.service ? 'service' : 'computer';
     connectGuest();
   }
   const timer = setInterval(() => {
@@ -915,10 +961,12 @@ export async function createPeerSession(options: PeerOptions) {
           throw new Error('This invitation expired. Ask the host for a new key.');
         if (invite.host === deviceId) throw new Error('Use this key on your teammate’s computer');
         const root = await realpath(folder);
-        if ((await readdir(root)).length)
+        if (!invite.service && (await readdir(root)).length)
           throw new Error(
             'Choose an empty folder for your local copy. Existing projects are never replaced.',
           );
+        // Validate the existing folder before recording a service connection. No local file is replaced here.
+        if (invite.service) await (await createWorkspaceGuard(root)).snapshot();
         await stopNetwork();
         saved = {
           seed: saved.seed,

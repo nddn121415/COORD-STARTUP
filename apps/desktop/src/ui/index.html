@@ -26,45 +26,58 @@
     <main>
       <header>
         <span>Workspace / <strong>Shared project</strong></span
-        ><span class="badge">EARLY ACCESS · 0.5</span>
+        ><span class="badge">EARLY ACCESS · 0.6</span>
       </header>
       <div class="content">
         <div class="heading">
           <div>
             <p class="eyebrow">WORK TOGETHER, FROM ANYWHERE</p>
             <h1>Your project. Connected.</h1>
-            <p class="muted">Share a local folder directly with people you approve.</p>
+            <p class="muted">Connect your local folder to a shared project.</p>
           </div>
           <span id="status" class="pill">Starting</span>
         </div>
         <div id="notice" role="status" aria-live="polite" hidden></div>
-        <section id="setup" class="columns">
-          <article class="card">
-            <span class="step">01 / START A PROJECT</span>
-            <h2>Bring your own folder.</h2>
+        <section id="setup">
+          <article class="card service-card">
+            <span class="step">A SHARED PROJECT, ALWAYS AVAILABLE</span>
+            <h2>Connect to shared service</h2>
             <p class="muted">
-              Choose the project on this computer. Send your invite key to a teammate, then approve
-              their request.
+              Use a service key to connect your local project folder. A deployed service keeps the
+              project available even when the person who created it goes offline.
             </p>
-            <button id="host" class="primary">Choose folder & share →</button>
-          </article>
-          <article class="card">
-            <span class="step">02 / JOIN A TEAMMATE</span>
-            <h2>Have an invite key?</h2>
-            <p class="muted">
-              Paste it here and choose an empty folder for your local copy. Your teammate approves
-              the connection.
-            </p>
-            <label for="invite">Invite key</label
-            ><input
+            <label for="invite">Project access key</label>
+            <input
               id="invite"
               type="password"
               autocomplete="off"
-              placeholder="Paste your teammate’s key"
-            /><button id="join" class="secondary">Choose folder & connect →</button>
+              placeholder="Paste a service key or computer invite key"
+            />
+            <p id="key-help" class="muted small">
+              Service keys grant project access without a separate approval. They expire and can be
+              used once—keep yours private. Choose an existing project folder or an empty one;
+              divergent local files are preserved for review.
+            </p>
+            <button id="join" class="primary">Choose project folder & connect →</button>
+            <p class="small muted">
+              This build is ready for your service deployment. No shared service is hosted for you
+              yet. Ask your service administrator for a key after deployment.
+            </p>
+          </article>
+          <article class="card temporary-card">
+            <div class="grow">
+              <span class="step">ALSO AVAILABLE</span>
+              <h2>Temporary sharing from this computer</h2>
+              <p class="muted">
+                Share a folder and approve teammates using an invite key. This computer must stay
+                online. Existing computer-hosted projects keep working this way.
+              </p>
+            </div>
+            <button id="host" class="secondary">Choose folder & share →</button>
           </article>
         </section>
         <section id="workspace" hidden>
+          <p id="authority-notice" class="connection-note"></p>
           <article class="folder card">
             <div class="folder-icon">▤</div>
             <div class="grow">
@@ -125,16 +138,19 @@
           <strong>How edits stay safe</strong>
           <p>
             COORD controls changes published through its tools. Other editors can still change local
-            files; those edits never silently overwrite a teammate’s newer version. Keep the host
-            online while collaborating. COORD sees activity reported through its tools; it does not
-            inspect an agent’s internal subagents or private conversations.
+            files; those edits never silently overwrite a teammate’s newer version. Service-backed
+            projects require the service online; temporary projects require the host computer
+            online. COORD sees activity reported through its tools; it does not inspect an agent’s
+            internal subagents or private conversations.
           </p>
           <p>
             Source files only: up to 500 text files, 1 MiB each and 16 MiB total. Recognized
             secrets, binary files, and build folders are excluded.
           </p>
         </div>
-        <footer>No account. No Git push or pull. An internet connection is required.</footer>
+        <footer>
+          No Git push or pull. An internet connection and a reachable project host are required.
+        </footer>
       </div>
     </main>
   </body>

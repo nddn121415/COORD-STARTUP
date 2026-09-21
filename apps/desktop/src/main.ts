@@ -53,7 +53,7 @@ function registerIpc(): void {
             title:
               action === 'host'
                 ? 'Choose the project to share'
-                : 'Choose an empty folder for your project copy',
+                : 'Choose your project folder (computer invites need an empty folder)',
             properties: ['openDirectory', 'createDirectory'],
           });
           if (!picked.canceled && picked.filePaths[0]) {

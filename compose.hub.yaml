@@ -1,0 +1,38 @@
+services:
+  hub:
+    build:
+      context: .
+      dockerfile: Dockerfile.hub
+    restart: unless-stopped
+    # Linux host networking permits HyperDHT's dynamically allocated UDP sockets.
+    network_mode: host
+    environment:
+      COORD_HUB_DATA: /data
+      COORD_HUB_HOST: 127.0.0.1
+      COORD_HUB_PORT: 4200
+      COORD_HUB_ADMIN_TOKEN: ${COORD_HUB_ADMIN_TOKEN:?Set a random administration token}
+    volumes:
+      - coord_hub_data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  https:
+    image: caddy:2
+    profiles: [https]
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      COORD_HUB_DOMAIN: ${COORD_HUB_DOMAIN:-}
+    volumes:
+      - ./distribution/hub/Caddyfile:/etc/caddy/Caddyfile:ro
+      - coord_caddy_data:/data
+      - coord_caddy_config:/config
+    depends_on:
+      - hub
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  coord_hub_data:
+  coord_caddy_data:
+  coord_caddy_config:

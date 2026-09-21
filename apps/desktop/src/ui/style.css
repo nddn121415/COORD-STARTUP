@@ -349,3 +349,34 @@ footer {
   display: block;
   font-size: 11px;
 }
+.service-card {
+  border-color: #c7d7fa;
+}
+.service-card #invite {
+  max-width: 560px;
+}
+.service-card #key-help {
+  max-width: 650px;
+}
+.temporary-card {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.temporary-card h2 {
+  font-size: 16px;
+}
+.temporary-card p {
+  font-size: 12px;
+  margin-bottom: 0;
+}
+.temporary-card #host {
+  margin: 0;
+}
+.connection-note {
+  font-size: 12px;
+  color: #526b90;
+  background: #eaf0fc;
+  padding: 13px 16px;
+  border-radius: 8px;
+}

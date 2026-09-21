@@ -14,3 +14,7 @@ apps/portal/.vite/
 apps/portal/.next/
 apps/portal/*.tsbuildinfo
 apps/desktop/release/
+
+# Local hub state must never be committed.
+coord-hub-data/
+hub-data/

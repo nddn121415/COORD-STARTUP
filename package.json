@@ -27,7 +27,10 @@
     "build:peer": "tsup --config tsup.peer.config.ts",
     "package:peer": "pnpm build:peer && node --import tsx scripts/package-peer.ts",
     "demo:peer": "pnpm build:peer && node dist/peer/coord-peer.cjs demo",
-    "check:peer-package": "node --import tsx scripts/check-peer-package.ts"
+    "check:peer-package": "node --import tsx scripts/check-peer-package.ts",
+    "hub:start": "node --env-file-if-exists=.env dist/hub.js",
+    "hub:dev": "node --import tsx --env-file-if-exists=.env apps/hub/main.ts",
+    "hub:admin": "node --import tsx --env-file-if-exists=.env scripts/hub-admin.ts"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",

@@ -6,6 +6,14 @@ Codex and Claude Code stay local, in their existing workflows. COORD tracks task
 
 This is a functional developer prototype, with real PostgreSQL persistence, authenticated WebSockets, local Git observation and an official SDK MCP server. It is not a production identity service. Automated tests exercise two independent connectors and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
 
+## Always-on collaboration service (0.6 preparation)
+
+The new service mode removes the original contributor's laptop as the project authority. An always-on COORD hub stores the shared source, keeps device identities, and grants exclusive file reservations. All desktop users connect as clients, so the original contributor can go offline while the others continue working.
+
+**Deployment is prepared, not live.** Use the [hub deployment guide](distribution/hub/README.md) to run one persistent Node24/Linux service (or the supplied Docker Compose deployment). The project registry uses SQLite; shared files and device state live in its persistent private data directory. The server can read the shared source. No GitHub transport or public website is required.
+
+The 0.6 desktop understands service invitation keys and can seed a new shared project from an existing local folder. Existing 0.5 rooms remain computer-hosted; they are not migrated automatically. The published 0.5 installer below does not support service keys. Use the 0.6 build after deploying the hub.
+
 ## Local-first desktop app
 
 [**Download COORD for Mac (Apple silicon)**](https://github.com/nddn121415/COORD-STARTUP/releases/download/desktop-v0.5.0/COORD-0.5.0-mac-arm64.dmg)

@@ -1,0 +1,20 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+RUN npm install --global pnpm@11.19.0
+COPY . .
+RUN pnpm install --frozen-lockfile --filter coord --ignore-scripts \
+    && pnpm exec tsup
+
+FROM node:24-bookworm-slim
+WORKDIR /app
+ENV NODE_ENV=production COORD_HUB_DATA=/data COORD_HUB_HOST=127.0.0.1 COORD_HUB_PORT=4200
+COPY --from=build /app/dist /app/dist
+COPY --from=build /app/package.json /app/package.json
+COPY --from=build /app/node_modules /app/node_modules
+RUN mkdir /data && chown node:node /data
+USER node
+VOLUME ["/data"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.COORD_HUB_PORT||4200)+'/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["node", "dist/hub.js"]

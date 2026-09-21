@@ -191,3 +191,66 @@ it('rejects old-project agent work queued behind a project switch', async () => 
   if (results[1].status === 'rejected')
     expect(String(results[1].reason)).toContain('Project changed');
 }, 30000);
+
+it('uses a persistent service authority after the first contributor leaves and consumes invite keys once', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'coord-service-')));
+  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  const net = await createTestnet(3);
+  cleanup.push(() => net.destroy());
+  const serverFolder = join(root, 'server-provisioning');
+  await mkdir(serverFolder);
+  const hub = await createPeerSession({
+    stateDirectory: join(root, 'hub-state'),
+    network: { bootstrap: net.bootstrap },
+    autoApproveInvitations: true,
+    watchFolder: false,
+    pollMs: 100,
+  });
+  cleanup.push(() => hub.dispose());
+  await hub.host(serverFolder);
+  async function client(name: string, initial?: string) {
+    const folder = join(root, name);
+    await mkdir(folder);
+    if (initial) await writeFile(join(folder, 'hello.ts'), initial);
+    const peer = await createPeerSession({
+      stateDirectory: join(root, name + '-state'),
+      network: { bootstrap: net.bootstrap },
+      pollMs: 100,
+    });
+    cleanup.push(() => peer.dispose());
+    await hub.invite();
+    const key = hub.getState().key!;
+    await peer.join(key, folder);
+    await until(() => peer.getState().status === 'connected', 'service admitted client');
+    return { peer, folder, key };
+  }
+  const creator = await client('creator', 'first contributor\n');
+  await until(() => hub.getState().files.length === 1, 'initial upload from existing project');
+  const second = await client('second');
+  const third = await client('third');
+  await until(
+    () => second.peer.getState().files.length === 1 && third.peer.getState().files.length === 1,
+    'shared copies',
+  );
+  expect(second.peer.getState().authority).toBe('service');
+  const consumed = third.key;
+  await creator.peer.dispose();
+  await writeFile(join(second.folder, 'hello.ts'), 'creator is offline\n');
+  await until(
+    async () => (await readFile(join(third.folder, 'hello.ts'), 'utf8')) === 'creator is offline\n',
+    'remaining devices continue without creator',
+  );
+  expect(await readFile(join(serverFolder, 'hello.ts'), 'utf8').catch(() => null)).toBe(null);
+  const intruderFolder = join(root, 'reuse');
+  await mkdir(intruderFolder);
+  const reuse = await createPeerSession({
+    stateDirectory: join(root, 'reuse-state'),
+    network: { bootstrap: net.bootstrap },
+    pollMs: 100,
+  });
+  cleanup.push(() => reuse.dispose());
+  await reuse.join(consumed, intruderFolder);
+  await until(() => reuse.getState().status === 'offline', 'consumed invite rejected');
+  expect(reuse.getState().files).toHaveLength(0);
+  expect(hub.getState().pending).toHaveLength(0);
+}, 30000);

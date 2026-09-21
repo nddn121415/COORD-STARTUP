@@ -1,0 +1,8 @@
+{$COORD_HUB_DOMAIN} {
+	# Administration calls carry a bearer token; request logging is disabled.
+	reverse_proxy 127.0.0.1:4200
+	header {
+		Cache-Control "no-store"
+		X-Content-Type-Options "nosniff"
+	}
+}
