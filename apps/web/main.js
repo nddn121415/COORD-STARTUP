@@ -45,7 +45,7 @@ function showAccount() {
   $('#auth').hidden = !!user;
   $('#workspace').hidden = !user;
   $('#logout').hidden = !user;
-  $('#identity').textContent = user ? '@' + user.username : '';
+  $('#identity').textContent = user ? user.username || user.email || 'Signed in' : '';
   $('#pairing').hidden = !user || location.pathname !== '/connect';
   if (!user) $('#detail').hidden = true;
 }
@@ -152,7 +152,9 @@ async function detail(id) {
     panel.append(row);
   }
   panel.append(node('h3', 'Agent activity'));
-  if (!(result.activity ?? []).length)
+  if (result.activity === undefined)
+    panel.append(node('p', 'View live agent activity in the connected desktop app.', 'muted'));
+  else if (!result.activity.length)
     panel.append(node('p', 'No active agents reporting yet.', 'muted'));
   for (const activity of result.activity ?? [])
     panel.append(
@@ -176,8 +178,12 @@ $('#register').addEventListener(
     void run(event.currentTarget, async () => {
       const form = $('#auth-form');
       if (!form.reportValidity()) return;
-      await api('register', Object.fromEntries(new FormData(form)));
+      const result = await api('register', Object.fromEntries(new FormData(form)));
       form.reset();
+      if (result.confirmationRequired) {
+        notify(result.message || 'Check your email to confirm your account.');
+        return;
+      }
       await load();
       notify('Account created.');
     }),
@@ -232,12 +238,50 @@ $('#pair-form').addEventListener('submit', (event) => {
     notify('Computer approved. Return to the COORD desktop app.');
   });
 });
+let pairingCode = '';
+$('#google').addEventListener(
+  'click',
+  (event) =>
+    void run(event.currentTarget, async () => {
+      const result = await api('google', {
+        next:
+          location.pathname === '/connect'
+            ? '/connect' + (pairingCode ? '?code=' + encodeURIComponent(pairingCode) : '')
+            : '/',
+      });
+      location.assign(result.url);
+    }),
+);
 if (location.pathname === '/connect') {
   const code = new URLSearchParams(location.search).get('code');
-  if (code) $('#pair-form').elements.code.value = code.slice(0, 20);
+  if (code) {
+    pairingCode = code.slice(0, 20);
+    $('#pair-form').elements.code.value = pairingCode;
+  }
   history.replaceState(null, '', '/connect');
 }
-void load().catch((error) => {
+void (async () => {
+  try {
+    const config = await api('config');
+    $('#google').hidden = !config.googleEnabled;
+    if (config.mode === 'supabase' && !config.hubConfigured) {
+      $('#service-status').hidden = false;
+      $('#service-status').textContent =
+        'Accounts and project invitations are ready. Desktop file collaboration needs the always-on service to be deployed.';
+    }
+  } catch {
+    const input = $('#identifier');
+    input.name = 'username';
+    input.type = 'text';
+    input.maxLength = 32;
+    input.minLength = 3;
+    input.pattern = '[a-zA-Z0-9_]{3,32}';
+    input.placeholder = 'your_name';
+    $('#identifier-label').textContent = 'Username';
+    $('#auth-help').textContent = 'Early testing uses a username and password.';
+  }
+  await load();
+})().catch((error) => {
   showAccount();
   if (error.message !== 'Unauthorized' && !/session|sign in|authentication/i.test(error.message))
     notify(error.message, true);

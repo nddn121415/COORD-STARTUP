@@ -12,6 +12,8 @@ services:
       COORD_HUB_PORT: 4200
       COORD_HUB_ADMIN_TOKEN: ${COORD_HUB_ADMIN_TOKEN:?Set a random administration token}
       COORD_PORTAL_TOKEN: ${COORD_PORTAL_TOKEN:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
     volumes:
       - coord_hub_data:/data
     security_opt:

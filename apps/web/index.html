@@ -28,6 +28,7 @@
           ><span>Protected file publishing</span>
         </div>
       </section>
+      <p id="service-status" class="muted" hidden></p>
       <p id="notice" role="status" aria-live="polite" hidden></p>
       <section id="auth" class="panel">
         <div>
@@ -37,13 +38,14 @@
         </div>
         <form id="auth-form">
           <label
-            >Username<input
-              name="username"
+            ><span id="identifier-label">Email</span
+            ><input
+              id="identifier"
+              name="email"
+              type="email"
               autocomplete="username"
-              pattern="[a-zA-Z0-9_]{3,32}"
-              minlength="3"
-              maxlength="32"
-              placeholder="your_name"
+              maxlength="254"
+              placeholder="you@example.com"
               required /></label
           ><label
             >Password<input
@@ -59,9 +61,10 @@
             <button class="primary" type="submit">Sign in</button
             ><button type="button" id="register">Create account</button>
           </div>
-          <small
-            >Early testing uses a username and password. Password recovery is not available
-            yet.</small
+          <button type="button" id="google" hidden>Continue with Google</button
+          ><small id="auth-help"
+            >Confirm your email after creating an account. Google sign-in is available when
+            configured.</small
           >
         </form>
       </section>

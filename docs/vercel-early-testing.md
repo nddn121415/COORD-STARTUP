@@ -1,6 +1,6 @@
 # COORD early testing: Vercel website and persistent hub
 
-The website and the collaboration hub are separate deployments. Vercel serves the account/project website and its account API proxy. A continuously running Linux hub stores accounts, membership, device approvals, shared source, and file reservations. Keeping that hub online lets teammates continue after the project creator closes their laptop.
+The website and the collaboration hub are separate deployments. Vercel serves the account/project website and its account API. Supabase Auth handles sign-in; Supabase PostgreSQL stores projects, membership, invitations, and device approvals. A continuously running Linux hub stores shared source and file reservations. Keeping that hub online lets teammates continue after the project creator closes their laptop.
 
 This document is a deployment runbook. It does not establish that a hub, a configured Vercel deployment, or an updated desktop download is already live.
 
@@ -19,7 +19,7 @@ Testers should not need Node, Docker, a database, admin credentials, manually en
 
 ## Why the hub runs separately
 
-The repository's hub is a long-running Node process with a stable peer identity, HyperDHT UDP sockets, a durable SQLite registry, and a private source directory. The Vercel deployment in this repository only uses static assets and request-scoped account proxy functions. Moving `apps/hub/main.ts` into a Vercel API handler would not preserve that lifecycle or provide its persistent private disk.
+The repository's hub is a long-running Node process with a stable peer identity, HyperDHT UDP sockets, a durable SQLite registry, and a private source directory. The Vercel deployment in this repository only uses static assets and request-scoped account functions. Moving `apps/hub/main.ts` into a Vercel API handler would not preserve that lifecycle or provide its persistent private disk.
 
 Vercel documents bounded Function execution and automatic concurrency scaling. Those properties are incompatible with using this particular singleton process as an always-running authority inside a request handler; this is an architectural conclusion about COORD's implementation, not a claim that Vercel has no other backend products. [Vercel Function limits](https://vercel.com/docs/functions/limitations)
 
@@ -45,9 +45,11 @@ COORD_HUB_DATA=/path/to/private/coord-hub-data
 COORD_HUB_HOST=127.0.0.1
 COORD_HUB_PORT=4200
 COORD_HUB_DOMAIN=hub.example.com
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_SECRET_KEY=REPLACE_WITH_YOUR_SERVER_SECRET
 ```
 
-These are placeholders, not usable credentials. Generate independent random secrets; keep the real file outside Git and readable only by the service owner. `COORD_HUB_ADMIN_TOKEN` is for private operator administration. `COORD_PORTAL_TOKEN` authenticates the website proxy to the hub's account API. The two credentials have different roles and must not be distributed to testers or embedded in desktop JavaScript.
+These are placeholders, not usable credentials. Generate independent random secrets; keep the real file outside Git and readable only by the service owner. `COORD_HUB_ADMIN_TOKEN` is for private operator administration. `COORD_PORTAL_TOKEN` authenticates the website backend to the hub's device-connection endpoint. The two credentials have different roles and must not be distributed to testers or embedded in desktop JavaScript.
 
 The hub can read canonical source to validate and publish changes. Encrypting transport does not hide files from the operator of that hub. Use a trusted host and protect disk access and backups.
 
@@ -55,7 +57,13 @@ The hub can read canonical source to validate and publish changes. Encrypting tr
 
 Import the repository using its root directory, so the root `vercel.json` and account function are included. The current configuration uses framework “Other”, `node scripts/build-web.mjs`, output `dist/web`, and the account function under `api/account`. Keep the checked-in configuration as the source of truth; remove stale dashboard build/output overrides from earlier deployment attempts if they contradict it. Do not select `apps/portal`, the old Sites project, or the Electron app directory as the root for this standalone Vercel website. [Vercel project configuration](https://vercel.com/docs/project-configuration)
 
-Set these **server-side** environment variables in the intended Vercel environment:
+First apply the SQL and configure Supabase Auth as described in [the Supabase setup guide](../supabase/README.md). Set these **server-side** environment variables in the intended Vercel environment:
+
+- `SUPABASE_URL`: your Supabase project origin.
+- `SUPABASE_PUBLISHABLE_KEY`: the project publishable key.
+- `SUPABASE_SECRET_KEY`: the privileged server key, kept out of browser and desktop bundles.
+- `COORD_WEBSITE_URL`: the exact HTTPS production website origin.
+- `COORD_GOOGLE_ENABLED`: `1` only after the Google OAuth provider is configured in Supabase.
 
 - `COORD_HUB_URL`: the hub's HTTPS origin, such as `https://hub.example.com`, without credentials, query parameters, or a path.
 - `COORD_PORTAL_TOKEN`: exactly the same portal secret configured on the hub.
@@ -64,7 +72,7 @@ Do not put either secret in a public-prefixed variable, static HTML, browser bun
 
 Deploy again after setting or changing environment variables. Vercel applies changed variables to new deployments rather than retroactively changing previous deployments. [Vercel environment variables](https://vercel.com/docs/environment-variables)
 
-The static page loading successfully is not an account-service health check. Registration, sign-in, project creation, and invitation acceptance must reach the configured hub through `/api/account`.
+Registration, sign-in, projects, invitations, and desktop pairing use Supabase through `/api/account` and can work before a hub is deployed. Connecting a desktop folder to a cloud project still needs `COORD_HUB_URL` and `COORD_PORTAL_TOKEN`. The website displays this distinction. Without `SUPABASE_URL`, the API retains its legacy hub account proxy for existing installations.
 
 ## Publish the matching desktop build
 
@@ -89,9 +97,9 @@ These checks are acceptance criteria, not claims that physical-device validation
 
 ## Diagnose common setup failures
 
-- **Website loads, account actions fail:** confirm the current deployment has both Vercel variables, the portal token matches the hub, and the hub's HTTPS certificate and origin are reachable.
+- **Website loads, account actions fail:** confirm the current deployment has the Supabase variables, the SQL migration is applied, and the project is available. Check `/api/account/config` for the selected backend mode.
 - **A Vercel login page appears inside an API response:** deployment protection may be intercepting requests from the desktop app. Configure access for the intended tester deployment; do not put a deployment-bypass secret in the app.
-- **Sign-in works, project connection stays offline:** inspect hub health and peer networking. The HTTPS account proxy cannot fix a blocked UDP connection.
+- **Sign-in works, project connection stays offline:** inspect hub health and peer networking. Confirm the hub has the matching Supabase configuration and portal token. Account HTTPS cannot fix a blocked UDP connection.
 - **Project disappears after redeployment:** inspect the persistent hub volume and service identity. Rebuilding the website should not recreate the hub data directory.
 - **An old app has no account screen:** publish and link the matching account-enabled desktop build.
 

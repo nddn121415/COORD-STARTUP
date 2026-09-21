@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { AddressInfo } from 'node:net';
 import { z } from 'zod';
+import { createCloudAuthority, type CloudOptions } from './cloud.js';
 import { accountRoutes, AccountError } from './accounts.js';
 import { createPeerSession, type PeerOptions } from '../desktop/peer-session.js';
 
@@ -16,6 +17,7 @@ export type HubOptions = {
   portalToken?: string;
   port?: number;
   host?: string;
+  cloud?: CloudOptions;
   network?: PeerOptions['network'];
 };
 class HttpError extends Error {
@@ -108,6 +110,9 @@ export async function createHub(options: HubOptions) {
     (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)
   )
     throw new Error('Invalid hub port');
+  if (options.cloud && !options.portalToken)
+    throw new Error('Cloud mode requires COORD_PORTAL_TOKEN');
+  const cloud = options.cloud ? createCloudAuthority(options.cloud) : undefined;
   const root = await privateDirectory(options.dataDirectory);
   const releaseSingleton = await acquireSingleton(root);
   try {
@@ -130,7 +135,7 @@ export async function createHub(options: HubOptions) {
     try {
       await chmod(databasePath, 0o600);
       db.exec(
-        'PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL) STRICT;',
+        'PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL) STRICT; CREATE TABLE IF NOT EXISTS cloud_projects(id TEXT PRIMARY KEY) STRICT;',
       );
     } catch (error) {
       db.close();
@@ -175,30 +180,32 @@ export async function createHub(options: HubOptions) {
         network: options.network,
         autoApproveInvitations: true,
         watchFolder: false,
-        authorizePeer: options.portalToken
-          ? (peerId: string) => {
-              try {
-                if (
-                  !db
-                    .prepare('SELECT 1 FROM account_members WHERE project_id=? LIMIT 1')
-                    .get(project.id)
-                )
-                  return true;
-                return Boolean(
-                  db
-                    .prepare(
-                      `SELECT 1 FROM account_devices d
+        authorizePeer: db.prepare('SELECT 1 FROM cloud_projects WHERE id=?').get(project.id)
+          ? (peerId: string) => cloud?.authorized(project.id, peerId) ?? false
+          : options.portalToken
+            ? (peerId: string) => {
+                try {
+                  if (
+                    !db
+                      .prepare('SELECT 1 FROM account_members WHERE project_id=? LIMIT 1')
+                      .get(project.id)
+                  )
+                    return true;
+                  return Boolean(
+                    db
+                      .prepare(
+                        `SELECT 1 FROM account_devices d
               JOIN account_sessions s ON s.hash=d.session_hash
               JOIN account_members m ON m.project_id=d.project_id AND m.user_id=d.user_id
               WHERE d.project_id=? AND d.peer_id=? AND s.user_id=d.user_id AND s.kind='device' AND s.expires>?`,
-                    )
-                    .get(project.id, peerId, Date.now()),
-                );
-              } catch {
-                return false;
+                      )
+                      .get(project.id, peerId, Date.now()),
+                  );
+                } catch {
+                  return false;
+                }
               }
-            }
-          : undefined,
+            : undefined,
       });
       try {
         if (session.getState().status === 'idle') await session.host(folder);
@@ -220,46 +227,52 @@ export async function createHub(options: HubOptions) {
       db.close();
       throw error;
     }
-    const accounts = accountRoutes({
-      db,
-      portalToken: options.portalToken,
-      body: jsonBody,
-      exclusive,
-      create: async (name) => {
-        if (projects().length >= 20) throw new AccountError(409, 'Hub project limit reached');
-        const project = { id: randomUUID(), name, createdAt: Date.now() };
-        db.prepare('INSERT INTO projects VALUES(?,?,?)').run(project.id, name, project.createdAt);
-        try {
-          await start(project);
-        } catch (error) {
-          db.prepare('DELETE FROM projects WHERE id=?').run(project.id);
-          throw error;
-        }
-        return project;
-      },
-      detail: async (id) => {
-        const project = lookup(id),
-          state = sessions.get(id)?.getState();
-        return {
-          ...project,
-          status: state?.status ?? 'offline',
-          peers: state?.peers ?? [],
-          files: state?.files ?? [],
-          activity: state?.activity ?? [],
-          conflicts: state?.conflicts ?? [],
-        };
-      },
-      invite: async (id, peerId) => {
-        const session = await start(lookup(id));
-        await session.invite(peerId);
-        const key = session.getState().key;
-        if (!key) throw new AccountError(503, 'Invitation unavailable');
-        return key;
-      },
-      revoke: async (id, peerId) => {
-        await (await start(lookup(id))).revoke(peerId);
-      },
-    });
+    const accounts = cloud
+      ? undefined
+      : accountRoutes({
+          db,
+          portalToken: options.portalToken,
+          body: jsonBody,
+          exclusive,
+          create: async (name) => {
+            if (projects().length >= 20) throw new AccountError(409, 'Hub project limit reached');
+            const project = { id: randomUUID(), name, createdAt: Date.now() };
+            db.prepare('INSERT INTO projects VALUES(?,?,?)').run(
+              project.id,
+              name,
+              project.createdAt,
+            );
+            try {
+              await start(project);
+            } catch (error) {
+              db.prepare('DELETE FROM projects WHERE id=?').run(project.id);
+              throw error;
+            }
+            return project;
+          },
+          detail: async (id) => {
+            const project = lookup(id),
+              state = sessions.get(id)?.getState();
+            return {
+              ...project,
+              status: state?.status ?? 'offline',
+              peers: state?.peers ?? [],
+              files: state?.files ?? [],
+              activity: state?.activity ?? [],
+              conflicts: state?.conflicts ?? [],
+            };
+          },
+          invite: async (id, peerId) => {
+            const session = await start(lookup(id));
+            await session.invite(peerId);
+            const key = session.getState().key;
+            if (!key) throw new AccountError(503, 'Invitation unavailable');
+            return key;
+          },
+          revoke: async (id, peerId) => {
+            await (await start(lookup(id))).revoke(peerId);
+          },
+        });
     const server = createServer({ maxHeaderSize: 8192 }, (req, res) => {
       void (async () => {
         if (req.headers.origin !== undefined)
@@ -268,7 +281,72 @@ export async function createHub(options: HubOptions) {
           reply(res, 200, { ok: !closing });
           return;
         }
+        if (req.url === '/cloud/connect' && req.method === 'POST') {
+          const supplied = Buffer.from(
+            typeof req.headers['x-coord-portal-token'] === 'string'
+              ? req.headers['x-coord-portal-token']
+              : '',
+          );
+          const expectedPortal = Buffer.from(options.portalToken ?? '');
+          if (
+            !cloud ||
+            !options.portalToken ||
+            supplied.length !== expectedPortal.length ||
+            !timingSafeEqual(supplied, expectedPortal)
+          )
+            throw new HttpError(401, 'Unauthorized');
+          if (closing || active >= 32) throw new HttpError(503, 'Hub unavailable');
+          active++;
+          try {
+            const parsed = z
+              .object({ projectId: z.string().uuid(), peerId: z.string().regex(/^[a-f0-9]{64}$/) })
+              .strict()
+              .safeParse(await jsonBody(req));
+            if (!parsed.success) throw new HttpError(400, 'Invalid cloud project request');
+            const { projectId, peerId } = parsed.data;
+            const key = await exclusive(async () => {
+              const remote = await cloud.project(projectId, peerId);
+              if (!remote || !remote.allowed)
+                throw new HttpError(403, 'Cloud project access denied');
+              let project: Project;
+              const existing = db.prepare('SELECT 1 FROM projects WHERE id=?').get(projectId);
+              if (existing) {
+                if (!db.prepare('SELECT 1 FROM cloud_projects WHERE id=?').get(projectId))
+                  throw new HttpError(409, 'Project identity belongs to a local project');
+                project = lookup(projectId);
+              } else {
+                if (projects().length >= 20) throw new HttpError(409, 'Hub project limit reached');
+                project = { id: projectId, name: remote.name, createdAt: Date.now() };
+                db.exec('BEGIN IMMEDIATE');
+                try {
+                  db.prepare('INSERT INTO projects VALUES(?,?,?)').run(
+                    project.id,
+                    project.name,
+                    project.createdAt,
+                  );
+                  db.prepare('INSERT INTO cloud_projects VALUES(?)').run(projectId);
+                  db.exec('COMMIT');
+                } catch (error) {
+                  db.exec('ROLLBACK');
+                  throw error;
+                }
+              }
+              const session = await start(project);
+              if (!(await cloud.authorized(projectId, peerId)))
+                throw new HttpError(403, 'Cloud project access denied');
+              await session.invite(peerId);
+              const invitation = session.getState().key;
+              if (!invitation) throw new HttpError(503, 'Invitation unavailable');
+              return invitation;
+            });
+            reply(res, 200, { key });
+          } finally {
+            active--;
+          }
+          return;
+        }
         if (req.url?.startsWith('/account/')) {
+          if (!accounts) throw new HttpError(404, 'Accounts are managed by the cloud website');
           if (closing) throw new HttpError(503, 'Hub is stopping');
           reply(res, 200, await accounts(req));
           return;

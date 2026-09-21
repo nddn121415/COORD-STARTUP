@@ -1,1 +1,1 @@
-export { default } from '../../apps/web-server/proxy.js';
+export { default } from '../../apps/web-server/supabase.js';

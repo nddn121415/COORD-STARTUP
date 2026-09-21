@@ -142,7 +142,7 @@ export type PeerOptions = {
   pollMs?: number;
   /** Trusted server-only mode. Redeeming an unexpired single-use capability authorizes a device. */
   autoApproveInvitations?: boolean;
-  authorizePeer?: (peerId: string) => boolean;
+  authorizePeer?: (peerId: string) => boolean | Promise<boolean>;
   /** Disable observing/mirroring the headless server's provisioning folder. */
   watchFolder?: boolean;
 };
@@ -234,9 +234,12 @@ export async function createPeerSession(options: PeerOptions) {
     options.onStateChanged?.(structuredClone(state));
   }
   const peerInvitations = new Map<string, z.infer<typeof inviteSchema>>();
-  const peerAllowed = (id: string) => {
+  const peerAllowed = async (id: string) => {
+    const epoch = generation,
+      project = saved.project;
     try {
-      return options.authorizePeer?.(id) !== false;
+      const allowed = await options.authorizePeer?.(id);
+      return allowed !== false && epoch === generation && project === saved.project;
     } catch {
       return false;
     }
@@ -711,7 +714,7 @@ export async function createPeerSession(options: PeerOptions) {
             })
             .strict()
             .parse(value);
-          if (data.project !== saved.project || !peerAllowed(id)) {
+          if (!(await peerAllowed(id)) || c.socket.destroyed || data.project !== saved.project) {
             c.close();
             return;
           }
@@ -758,11 +761,11 @@ export async function createPeerSession(options: PeerOptions) {
               return;
             }
             if (
+              !(await peerAllowed(id)) ||
               epoch !== generation ||
               saved.project !== project ||
               c.socket.destroyed ||
-              !saved.approved[id] ||
-              !peerAllowed(id)
+              !saved.approved[id]
             ) {
               c.close();
               return;
@@ -790,7 +793,13 @@ export async function createPeerSession(options: PeerOptions) {
             authorized = true;
             clearTimeout(timeout);
           }
-          if (!authorized || !saved.approved[id] || channels.get(id) !== c || !peerAllowed(id)) {
+          if (
+            !(await peerAllowed(id)) ||
+            !authorized ||
+            !saved.approved[id] ||
+            channels.get(id) !== c ||
+            c.socket.destroyed
+          ) {
             c.close();
             return;
           }
@@ -806,12 +815,26 @@ export async function createPeerSession(options: PeerOptions) {
             .parse(value);
           try {
             const result = await authority(data.operation, data.input, `${id}:${data.sessionId}`);
-            if (!saved.approved[id] || channels.get(id) !== c || !peerAllowed(id)) {
+            if (
+              !(await peerAllowed(id)) ||
+              !saved.approved[id] ||
+              channels.get(id) !== c ||
+              c.socket.destroyed
+            ) {
               c.close();
               return;
             }
             c.send({ type: 'reply', id: data.id, result });
           } catch (error) {
+            if (
+              !(await peerAllowed(id)) ||
+              !saved.approved[id] ||
+              channels.get(id) !== c ||
+              c.socket.destroyed
+            ) {
+              c.close();
+              return;
+            }
             c.send({
               type: 'reply',
               id: data.id,
@@ -1023,11 +1046,11 @@ export async function createPeerSession(options: PeerOptions) {
       saved.approved[id] = peer.name;
       await save();
       if (
+        !(await peerAllowed(id)) ||
         epoch !== generation ||
         !saved.approved[id] ||
         pending.get(id) !== peer ||
-        peer.channel.socket.destroyed ||
-        !peerAllowed(id)
+        peer.channel.socket.destroyed
       ) {
         peer.channel.close();
         return;

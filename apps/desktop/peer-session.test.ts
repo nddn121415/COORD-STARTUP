@@ -3,7 +3,7 @@ import createTestnet from 'hyperdht/testnet.js';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createPeerSession } from './peer-session.js';
+import { createPeerSession, type PeerOptions } from './peer-session.js';
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
   for (const close of cleanup.splice(0).reverse()) await close();
@@ -16,7 +16,7 @@ async function until(fn: () => boolean | Promise<boolean>, label: string) {
   }
   throw new Error(`Timed out: ${label}`);
 }
-async function fixture() {
+async function fixture(authorizePeer?: PeerOptions['authorizePeer']) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'coord-session-')));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   const net = await createTestnet(3);
@@ -26,6 +26,7 @@ async function fixture() {
   await writeFile(join(hostFolder, 'hello.ts'), 'original\n');
   const hostOptions = {
     stateDirectory: join(root, 'host-state'),
+    authorizePeer,
     network: { bootstrap: net.bootstrap },
     pollMs: 100,
   };
@@ -253,4 +254,36 @@ it('uses a persistent service authority after the first contributor leaves and c
   await until(() => reuse.getState().status === 'offline', 'consumed invite rejected');
   expect(reuse.getState().files).toHaveLength(0);
   expect(hub.getState().pending).toHaveLength(0);
+}, 30000);
+
+it('does not revive a locally revoked peer after delayed cloud authorization resolves', async () => {
+  let blocking = false;
+  let entered = false;
+  let release!: (value: boolean) => void;
+  const delayed = new Promise<boolean>((resolve) => {
+    release = resolve;
+  });
+  const { host, guest } = await fixture(async () => {
+    if (!blocking) return true;
+    entered = true;
+    return delayed;
+  });
+  const peer = await guest('delayed-cloud');
+  blocking = true;
+  const request = peer.peer.request(
+    'reserve',
+    { paths: ['hello.ts'], summary: 'stale grant' },
+    'delayed-agent',
+  );
+  const settled = request.then(
+    () => 'accepted',
+    () => 'rejected',
+  );
+  await until(() => entered, 'cloud request pending');
+  await host.revoke(peer.id);
+  release(true);
+  expect(await settled).toBe('rejected');
+  const context = (await host.request('context', {}, 'inspect')) as { locks: unknown[] };
+  expect(context.locks).toHaveLength(0);
+  expect(host.getState().peers.find((p) => p.id === peer.id)?.approved).not.toBe(true);
 }, 30000);
