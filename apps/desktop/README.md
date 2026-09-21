@@ -4,14 +4,14 @@ COORD runs in the menu bar and connects local project folders to a shared coordi
 
 ## Account connection
 
-1. Open COORD and enter your collaboration website’s HTTPS origin.
+1. Open COORD. The COORD website is already selected; change the HTTPS origin only for another deployment.
 2. Choose **Sign in through website**. Approve the displayed code in the browser using your website account. The app updates automatically.
-3. Choose a project from your account, then select its local folder. The website issues a connection invitation bound to this computer’s public identity.
+3. Choose a project from your account, then select its local folder. The website binds this computer to your account; the app then shares source and coordination over HTTPS.
 4. Open a fresh trusted Codex or Claude session in the selected project. COORD installs the project integration automatically; existing sessions may need to reload their MCP configuration.
 
 The browser opens `/connect?code=<userCode>`. Device credentials remain in the native process, encrypted using the OS keychain. The renderer sees the account name, project list, and approval code, never the session token or device polling secret.
 
-Invite-key pairing remains available. Service projects remain available while the service is online. Temporary computer-hosted projects require their host computer to remain online. Selecting an existing folder does not grant permission to overwrite divergent local files.
+Account projects store files in Supabase and remain available after the creator goes offline. Invite-key pairing remains available. Service projects remain available while the service is online. Temporary computer-hosted projects require their host computer to remain online. Selecting an existing folder does not grant permission to overwrite divergent local files.
 
 ## Development
 
@@ -21,7 +21,7 @@ pnpm --filter @coord/desktop build
 pnpm --filter @coord/desktop start
 ```
 
-Set `COORD_WEBSITE_URL` at build time to your stable production HTTPS origin. Without it, users enter their website address. An HTTPS origin override is available in the sign-in screen; HTTP is permitted only for loopback development hosts. No transient preview address is compiled into the default build.
+Set `COORD_WEBSITE_URL` at build time to your stable production HTTPS origin. Without it, the build uses `https://coord-startup-control-plane.vercel.app`. An HTTPS origin override is available in the sign-in screen; HTTP is permitted only for loopback development hosts. The default points to the stable production website.
 
 ## Build the Mac download
 

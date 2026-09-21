@@ -86,7 +86,7 @@ export async function nativePostgres(options: NativePostgresOptions) {
     child.kill('SIGINT');
   };
   process.once('exit', emergency);
-  async function stop() {
+  async function stop(options: { graceful?: boolean } = {}) {
     process.off('exit', emergency);
     if (child.exitCode !== null || child.signalCode !== null) return;
     await new Promise<void>((resolve, reject) => {
@@ -98,7 +98,9 @@ export async function nativePostgres(options: NativePostgresOptions) {
         clearTimeout(timeout);
         resolve();
       });
-      child.kill('SIGINT');
+      // Test pools can resolve end() before their sockets finish closing. Smart
+      // shutdown lets those sessions drain; a leaked session still fails timeout.
+      child.kill(options.graceful ? 'SIGTERM' : 'SIGINT');
     });
   }
   const deadline = Date.now() + 15_000;

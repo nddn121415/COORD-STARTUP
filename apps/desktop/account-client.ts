@@ -27,6 +27,14 @@ export function validateWebsite(value: string): string {
     throw new Error('Use an HTTPS website origin, or HTTP localhost for testing.');
   return url.origin;
 }
+export class AccountRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 export async function createAccountClient(options: {
   stateDirectory: string;
   website: string;
@@ -72,17 +80,24 @@ export async function createAccountClient(options: {
     warning,
   });
   async function request(path: string, body?: unknown, authenticated = false) {
+    const epoch = generation;
+    const requestWebsite = website;
+    const requestToken = token;
+    const isSync = path.endsWith('/sync');
+    const bodyText = body === undefined ? undefined : JSON.stringify(body);
+    if (bodyText && Buffer.byteLength(bodyText) > (isSync ? 2 * 1024 * 1024 : 4096))
+      throw new Error('Website request was too large.');
     if (!website) throw new Error('Set the collaboration website address first.');
     if (authenticated && !token) throw new Error('Sign in first.');
-    const response = await (options.fetch ?? fetch)(`${website}/api/account/${path}`, {
+    const response = await (options.fetch ?? fetch)(`${requestWebsite}/api/account/${path}`, {
       method: body === undefined ? 'GET' : 'POST',
       redirect: 'error',
-      signal: AbortSignal.timeout(path.endsWith('/connect') ? 45000 : 15000),
+      signal: AbortSignal.timeout(path.endsWith('/connect') || isSync ? 45000 : 15000),
       headers: {
         'Content-Type': 'application/json',
-        ...(authenticated ? { Authorization: `Bearer ${token}` } : {}),
+        ...(authenticated ? { Authorization: `Bearer ${requestToken}` } : {}),
       },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(bodyText === undefined ? {} : { body: bodyText }),
     });
     const reader = response.body?.getReader();
     let size = 0;
@@ -93,12 +108,19 @@ export async function createAccountClient(options: {
           const part = await reader.read();
           if (part.done) break;
           size += part.value.length;
-          if (size > 512 * 1024) throw new Error('Website response was too large.');
+          if (size > (isSync ? 2 * 1024 * 1024 : 512 * 1024))
+            throw new Error('Website response was too large.');
           chunks.push(part.value);
         }
     } finally {
       await reader?.cancel().catch(() => {});
     }
+    if (
+      epoch !== generation ||
+      requestWebsite !== website ||
+      (authenticated && requestToken !== token)
+    )
+      throw new Error('Sign-in changed. Choose the project again.');
     const text = Buffer.concat(chunks).toString('utf8');
     let value: unknown;
     try {
@@ -110,12 +132,13 @@ export async function createAccountClient(options: {
     }
     if (!response.ok) {
       const detail = z.object({ error: z.string().trim().min(1).max(300) }).safeParse(value);
-      throw new Error(
+      throw new AccountRequestError(
         response.status === 401
           ? 'Sign-in expired. Sign in again.'
           : detail.success
             ? detail.data.error.replace(/[\u0000-\u001f\u007f]/g, ' ')
             : `Website request failed (${response.status}).`,
+        response.status,
       );
     }
     return value;
@@ -232,6 +255,54 @@ export async function createAccountClient(options: {
       return `${website}/connect?code=${encodeURIComponent(result.userCode)}`;
     },
     signOut,
+    async projectConnection(id: string, peerId: string) {
+      if (!projects.some((p) => p.id === id) || !/^[a-f0-9]{64}$/.test(peerId))
+        throw new Error('Choose an available project.');
+      const origin = website;
+      const payload = await request(
+        `projects/${encodeURIComponent(id)}/connect`,
+        { peerId, transport: 'https' },
+        true,
+      ).catch(async (error: unknown) => {
+        // Older self-hosted account servers reject the new transport field.
+        if (!(error instanceof AccountRequestError) || error.status !== 400) throw error;
+        return request(`projects/${encodeURIComponent(id)}/connect`, { peerId }, true);
+      });
+      const result = z
+        .union([
+          z.object({ transport: z.literal('https'), projectId: z.string().uuid() }),
+          z.object({ key: z.string().startsWith('coord1.').max(4096) }),
+        ])
+        .parse(payload);
+      if ('transport' in result) {
+        if (result.projectId !== id) throw new Error('Website returned a different project.');
+        return { transport: 'https' as const, projectId: result.projectId, website: origin };
+      }
+      return { transport: 'peer' as const, key: result.key };
+    },
+    async sync(
+      projectId: string,
+      peerId: string,
+      sessionId: string,
+      operation: string,
+      input: Record<string, unknown>,
+      expectedWebsite: string,
+    ) {
+      if (validateWebsite(expectedWebsite) !== website)
+        throw new Error('Sign-in website changed. Reconnect this project.');
+      z.string().uuid().parse(projectId);
+      z.string()
+        .regex(/^[a-f0-9]{64}$/)
+        .parse(peerId);
+      z.string()
+        .regex(/^[a-zA-Z0-9_-]{1,100}$/)
+        .parse(sessionId);
+      return request(
+        `projects/${encodeURIComponent(projectId)}/sync`,
+        { peerId, sessionId, operation, input },
+        true,
+      );
+    },
     async projectKey(id: string, peerId: string) {
       if (!projects.some((p) => p.id === id) || !/^[a-f0-9]{64}$/.test(peerId))
         throw new Error('Choose an available project.');

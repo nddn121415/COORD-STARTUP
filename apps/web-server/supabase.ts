@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import legacy from './proxy.js';
+import { cloudInput } from './cloud-input.js';
 type Request = IncomingMessage & { body?: unknown };
 type Options = {
   url?: string;
@@ -11,6 +12,7 @@ type Options = {
   hubUrl?: string;
   portalToken?: string;
   googleEnabled?: boolean;
+  storageMode?: 'supabase';
   fetch?: typeof fetch;
 };
 const names = {
@@ -27,7 +29,7 @@ class ApiError extends Error {
     super(message);
   }
 }
-async function bounded(response: Response) {
+async function bounded(response: Response, limit = 1024 * 1024) {
   const reader = response.body?.getReader();
   if (!reader) return {};
   const chunks: Uint8Array[] = [];
@@ -37,7 +39,7 @@ async function bounded(response: Response) {
       const part = await reader.read();
       if (part.done) break;
       size += part.value.length;
-      if (size > 1024 * 1024) throw new Error('Response too large');
+      if (size > limit) throw new Error('Response too large');
       chunks.push(part.value);
     }
     return JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
@@ -45,17 +47,17 @@ async function bounded(response: Response) {
     await reader.cancel();
   }
 }
-async function requestBody(req: Request) {
+async function requestBody(req: Request, limit = 4096) {
   if (req.body !== undefined) {
     const text = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    if (Buffer.byteLength(text) > 4096) throw new ApiError(400, 'Request too large');
+    if (Buffer.byteLength(text) > limit) throw new ApiError(400, 'Request too large');
     return JSON.parse(text) as unknown;
   }
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += Buffer.byteLength(chunk);
-    if (size > 4096) throw new ApiError(400, 'Request too large');
+    if (size > limit) throw new ApiError(400, 'Request too large');
     chunks.push(Buffer.from(chunk));
   }
   return JSON.parse(Buffer.concat(chunks).toString() || '{}') as unknown;
@@ -192,13 +194,8 @@ export function createSupabaseHandler(options: Options) {
         }
         return String(result.data.id);
       };
-      const rpc = async (
-        action: string,
-        payload: unknown,
-        userId: string | null,
-        deviceToken: string | null,
-      ) => {
-        const response = await fetcher(base + '/rest/v1/rpc/coord_account_api', {
+      const database = async (name: string, parameters: unknown, limit = 1024 * 1024) => {
+        const response = await fetcher(base + '/rest/v1/rpc/' + name, {
           method: 'POST',
           headers: {
             apikey: options.secretKey!,
@@ -207,16 +204,11 @@ export function createSupabaseHandler(options: Options) {
               : {}),
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            p_action: action,
-            p_user_id: userId,
-            p_device_token: deviceToken,
-            p_payload: payload,
-          }),
+          body: JSON.stringify(parameters),
           redirect: 'error',
           signal: AbortSignal.timeout(30000),
         });
-        const data = await bounded(response);
+        const data = await bounded(response, limit);
         if (!response.ok) throw new ApiError(503, 'Account database is unavailable');
         if (typeof data.error === 'string')
           throw new ApiError(
@@ -227,11 +219,26 @@ export function createSupabaseHandler(options: Options) {
           );
         return data;
       };
+      const rpc = async (
+        action: string,
+        payload: unknown,
+        userId: string | null,
+        deviceToken: string | null,
+      ) => {
+        return database('coord_account_api', {
+          p_action: action,
+          p_user_id: userId,
+          p_device_token: deviceToken,
+          p_payload: payload,
+        });
+      };
       if (path === 'config' && method === 'GET') {
         send(res, 200, {
           mode: 'supabase',
           googleEnabled: options.googleEnabled === true,
-          hubConfigured: Boolean(options.hubUrl && options.portalToken),
+          hubConfigured:
+            options.storageMode === 'supabase' || Boolean(options.hubUrl && options.portalToken),
+          ...(options.storageMode === 'supabase' ? { syncTransport: 'https' } : {}),
           websiteUrl: site,
         });
         return;
@@ -351,6 +358,42 @@ export function createSupabaseHandler(options: Options) {
         return;
       }
       const deviceToken = bearer?.slice(7) ?? null;
+      const sync = /^projects\/([a-f0-9-]{36})\/sync$/.exec(path);
+      if (sync) {
+        if (options.storageMode !== 'supabase') throw new ApiError(404, 'Not found');
+        if (method !== 'POST') throw new ApiError(405, 'Method not allowed');
+        if (!deviceToken) throw new ApiError(401, 'Desktop sign-in required');
+        if (!id.safeParse(sync[1]).success) throw new ApiError(400, 'Invalid project');
+        const body = await requestBody(req, 2 * 1024 * 1024);
+        let parsed;
+        try {
+          parsed = cloudInput(body);
+        } catch (error) {
+          throw new ApiError(
+            400,
+            error instanceof z.ZodError
+              ? 'Invalid sharing request'
+              : error instanceof Error
+                ? error.message
+                : 'Invalid sharing request',
+          );
+        }
+        const data = await database(
+          'coord_sync_api',
+          {
+            p_project_id: sync[1],
+            p_peer_id: parsed.peerId,
+            p_session_id: parsed.sessionId,
+            p_device_token: deviceToken,
+            p_operation: parsed.operation,
+            p_input: parsed.input,
+          },
+          2 * 1024 * 1024,
+        );
+        send(res, 200, data);
+        return;
+      }
+
       const userId = deviceToken || openDevice ? null : await verifiedUser();
       if (path === 'logout' && method === 'POST') {
         if (deviceToken) await rpc('logout', {}, null, deviceToken);
@@ -405,6 +448,20 @@ export function createSupabaseHandler(options: Options) {
         throw new ApiError(400, 'Invalid request');
       // URL identity wins over body properties, and authenticated identity is never accepted from JSON.
       const input = { ...body, ...payload };
+      if (action === 'connect' && options.storageMode === 'supabase') {
+        if (!deviceToken) throw new ApiError(401, 'Desktop sign-in required');
+        if (!('transport' in input) || input.transport !== 'https')
+          throw new ApiError(426, 'Update COORD to version 0.8 or later to connect this project.');
+        const result = await rpc(
+          action,
+          { projectId: input.projectId, peerId: (input as Record<string, unknown>).peerId },
+          null,
+          deviceToken,
+        );
+        if (result.ok !== true) throw new ApiError(503, 'Could not connect project');
+        send(res, 200, { transport: 'https', projectId: input.projectId });
+        return;
+      }
       if (action === 'connect' && (!options.hubUrl || !options.portalToken))
         throw new ApiError(
           503,
@@ -455,6 +512,7 @@ const handler = createSupabaseHandler({
   hubUrl: process.env.COORD_HUB_URL,
   portalToken: process.env.COORD_PORTAL_TOKEN,
   googleEnabled: process.env.COORD_GOOGLE_ENABLED === '1',
+  storageMode: process.env.COORD_STORAGE_MODE === 'supabase' ? 'supabase' : undefined,
 });
 export default (req: Request, res: ServerResponse) =>
   process.env.SUPABASE_URL ? handler(req, res) : legacy(req, res);

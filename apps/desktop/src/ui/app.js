@@ -55,7 +55,7 @@ function render(state) {
   $('folder-path').textContent = state.folder || '';
   $('authority-notice').textContent =
     state.authority === 'service'
-      ? 'Shared service · The creator’s computer can go offline. The service must remain online.'
+      ? 'Shared project · Changes sync over the internet. The creator’s computer can go offline.'
       : 'Temporary sharing · The host computer must stay online for this project.';
   $('invite-card').hidden = !state.key;
   $('share-key').value = state.key || '';

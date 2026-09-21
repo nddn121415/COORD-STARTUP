@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { createWorkspaceGuard, reconcileSnapshot } from './workspace-guard.js';
 import { startLocalAgentBridge, installLocalAgents } from './local-agent.js';
+import { createCloudClient } from './cloud-client.js';
+import { AccountRequestError, validateWebsite } from './account-client.js';
 
 const hex = z.string().regex(/^[a-f0-9]{64}$/);
 const inviteSchema = z
@@ -53,7 +55,8 @@ export type PeerState = {
 };
 type Saved = {
   seed: string;
-  role?: 'host' | 'guest';
+  role?: 'host' | 'guest' | 'cloud';
+  website?: string;
   folder?: string;
   project?: string;
   invitation?: z.infer<typeof inviteSchema>;
@@ -145,6 +148,17 @@ export type PeerOptions = {
   authorizePeer?: (peerId: string) => boolean | Promise<boolean>;
   /** Disable observing/mirroring the headless server's provisioning folder. */
   watchFolder?: boolean;
+  cloud?: {
+    currentWebsite: () => string | undefined;
+    request: (
+      website: string,
+      projectId: string,
+      peerId: string,
+      sessionId: string,
+      operation: string,
+      input: Record<string, unknown>,
+    ) => Promise<unknown>;
+  };
 };
 export async function createPeerSession(options: PeerOptions) {
   await mkdir(options.stateDirectory, { recursive: true, mode: 0o700 });
@@ -158,7 +172,17 @@ export async function createPeerSession(options: PeerOptions) {
     saved = z
       .object({
         seed: hex,
-        role: z.enum(['host', 'guest']).optional(),
+        role: z.enum(['host', 'guest', 'cloud']).optional(),
+        website: z
+          .string()
+          .refine((value) => {
+            try {
+              return validateWebsite(value) === value;
+            } catch {
+              return false;
+            }
+          })
+          .optional(),
         folder: z.string().optional(),
         project: z.string().uuid().optional(),
         invitation: inviteSchema.optional(),
@@ -175,6 +199,7 @@ export async function createPeerSession(options: PeerOptions) {
   const keys = DHT.keyPair(Buffer.from(saved.seed, 'hex'));
   const deviceId = keys.publicKey.toString('hex');
   let node: DHT | undefined, guard: Awaited<ReturnType<typeof createWorkspaceGuard>> | undefined;
+  let cloud: ReturnType<typeof createCloudClient> | undefined;
   let guest: Channel | undefined,
     authenticated = false,
     disposed = false,
@@ -445,7 +470,9 @@ export async function createPeerSession(options: PeerOptions) {
           .object({ files: snapshotSchema })
           .passthrough()
           .parse(await request('snapshot', {}, sessionId));
+        assertBoundProject();
         const result = await reconcileSnapshot(directory, response.files, workspace.baseline);
+        assertBoundProject();
         workspace.baseline = result.baseline;
         await writeFile(
           join(options.stateDirectory, `workspace-${saved.project}-${sessionId}.json`),
@@ -487,6 +514,7 @@ export async function createPeerSession(options: PeerOptions) {
         }
         if (!changes.length) return { files: [], notice: 'No changes to publish' };
         const result = await request('publish', { changes }, sessionId);
+        assertBoundProject();
         workspace.baseline = Object.fromEntries(files.map((file) => [file.path, file.hash]));
         await writeFile(
           join(options.stateDirectory, `workspace-${saved.project}-${sessionId}.json`),
@@ -495,6 +523,13 @@ export async function createPeerSession(options: PeerOptions) {
         );
         return result;
       });
+    if (saved.role === 'cloud') {
+      if (!cloud || !saved.website || options.cloud?.currentWebsite() !== saved.website)
+        throw new Error('Sign in to this project’s website to resume synchronization.');
+      const result = await cloud.request(operation, input, sessionId);
+      assertBoundProject();
+      return result;
+    }
     if (saved.role === 'host' && state.status === 'hosting')
       return authority(operation, input, `${deviceId}:${sessionId}`);
     if (!authenticated || !guest)
@@ -575,7 +610,7 @@ export async function createPeerSession(options: PeerOptions) {
       hash: f.hash,
       owner: payload.context.locks.find((l) => l.path === f.path)?.owner,
     }));
-    if (saved.role === 'guest')
+    if (saved.role === 'guest' || saved.role === 'cloud')
       state.peers = payload.context.peers
         .filter((p) => p.id !== deviceId)
         .map((p) => ({ ...p, approved: true }));
@@ -592,18 +627,29 @@ export async function createPeerSession(options: PeerOptions) {
       pollBusy ||
       disposed ||
       !saved.folder ||
-      !(state.status === 'hosting' || state.status === 'connected')
+      !(
+        state.status === 'hosting' ||
+        state.status === 'connected' ||
+        (saved.role === 'cloud' && state.status === 'offline')
+      )
     )
       return;
     pollBusy = true;
+    const epoch = generation;
+    const assertCurrent = () => {
+      if (epoch !== generation || disposed) throw new Error('Project changed.');
+    };
     try {
       if (options.watchFolder === false) {
-        await applySnapshot(await request('snapshot', { digest }, 'folder'));
+        const response = await request('snapshot', { digest }, 'folder');
+        assertCurrent();
+        await applySnapshot(response);
         state.error = undefined;
         return;
       }
       // Local files are drafts. A divergent draft never overwrites a newer shared revision.
       const local = await (await createWorkspaceGuard(saved.folder)).snapshot();
+      assertCurrent();
       const localMap = new Map(local.map((f) => [f.path, f]));
       const canonical = new Map(lastSnapshot.map((f) => [f.path, f]));
       const changes: { path: string; baseHash: string | null; content: string | null }[] = [];
@@ -625,6 +671,7 @@ export async function createPeerSession(options: PeerOptions) {
       }
       // Send one bounded batch; individual rejected files stay local for review.
       for (const change of changes.slice(0, 50)) {
+        let remoteUnavailable = false;
         try {
           await request(
             'reserve',
@@ -632,16 +679,31 @@ export async function createPeerSession(options: PeerOptions) {
             'folder',
           );
           await request('publish', { changes: [change] }, 'folder');
-        } catch {
+        } catch (error) {
+          // Contention stays local; an outage ends this cycle rather than timing out once per file.
+          if (
+            saved.role === 'cloud' &&
+            (!(error instanceof AccountRequestError) || error.status !== 409)
+          ) {
+            remoteUnavailable = true;
+            throw error;
+          }
           /* Reconciliation exposes the conflicting local paths. */
         } finally {
-          await request('release', { paths: [change.path] }, 'folder').catch(() => {});
+          if (!remoteUnavailable)
+            await request('release', { paths: [change.path] }, 'folder').catch(() => {});
         }
       }
-      await applySnapshot(await request('snapshot', { digest }, 'folder'));
+      const response = await request('snapshot', { digest }, 'folder');
+      assertCurrent();
+      await applySnapshot(response);
+      if (saved.role === 'cloud') state.status = 'connected';
       state.error = undefined;
     } catch (error) {
-      state.error = error instanceof Error ? error.message : 'Synchronization paused';
+      if (epoch === generation && !disposed) {
+        state.error = error instanceof Error ? error.message : 'Synchronization paused';
+        if (saved.role === 'cloud') state.status = 'offline';
+      }
     } finally {
       pollBusy = false;
       emit();
@@ -659,6 +721,7 @@ export async function createPeerSession(options: PeerOptions) {
   }
   async function stopNetwork() {
     generation++;
+    cloud = undefined;
     invitation = undefined;
     peerInvitations.clear();
     authenticated = false;
@@ -978,10 +1041,67 @@ export async function createPeerSession(options: PeerOptions) {
     state.authority = saved.invitation?.service ? 'service' : 'computer';
     connectGuest();
   }
+  async function startCloud() {
+    const epoch = generation,
+      project = saved.project,
+      website = saved.website;
+    if (!project || !website || !options.cloud)
+      throw new Error('Sign in to resume this shared project.');
+    cloud = createCloudClient(async (operation, input, sessionId) => {
+      if (
+        epoch !== generation ||
+        disposed ||
+        saved.project !== project ||
+        saved.website !== website ||
+        options.cloud?.currentWebsite() !== website
+      )
+        throw new Error('Sign-in or project changed. Reconnect this project.');
+      const result = await options.cloud.request(
+        website,
+        project,
+        deviceId,
+        sessionId,
+        operation,
+        input,
+      );
+      if (
+        epoch !== generation ||
+        disposed ||
+        saved.project !== project ||
+        saved.website !== website ||
+        options.cloud.currentWebsite() !== website
+      )
+        throw new Error('Sign-in or project changed. Reconnect this project.');
+      return result;
+    });
+    state.folder = saved.folder;
+    state.authority = 'service';
+    state.status = 'connecting';
+    emit();
+    try {
+      const snapshot = await request('snapshot', {}, 'folder');
+      if (epoch !== generation || disposed) return;
+      await applySnapshot(snapshot);
+      if (epoch !== generation || disposed) return;
+      state.status = 'connected';
+      await setupAgents();
+      await syncNow();
+    } catch (error) {
+      if (epoch !== generation || disposed) return;
+      state.status = 'offline';
+      state.error =
+        error instanceof Error
+          ? error.message
+          : 'Synchronization unavailable. Local edits are preserved.';
+      // Integration is local and remains useful while this project is temporarily offline.
+      await setupAgents();
+      emit();
+    }
+  }
   const timer = setInterval(() => {
     if (saved.role === 'guest' && !guest && node) connectGuest();
     void synchronize();
-  }, options.pollMs ?? 2000);
+  }, options.pollMs ?? 3000);
   timer.unref();
   const result = {
     getState: () => structuredClone(state),
@@ -1037,6 +1157,29 @@ export async function createPeerSession(options: PeerOptions) {
         await save();
         state = empty();
         await startGuest();
+      });
+    },
+    async joinCloud(projectId: string, folder: string, website: string) {
+      return exclusive(async () => {
+        z.string().uuid().parse(projectId);
+        const origin = validateWebsite(website);
+        if (!options.cloud || options.cloud.currentWebsite() !== origin)
+          throw new Error('Sign in to the selected project’s website first.');
+        const root = await realpath(folder);
+        await (await createWorkspaceGuard(root)).snapshot();
+        await stopNetwork();
+        saved = {
+          seed: saved.seed,
+          role: 'cloud',
+          folder: root,
+          project: projectId,
+          website: origin,
+          approved: {},
+          baseline: {},
+        };
+        await save();
+        state = empty();
+        await startCloud();
       });
     },
     async approve(id: string) {
@@ -1106,6 +1249,7 @@ export async function createPeerSession(options: PeerOptions) {
       if (!info.isDirectory() || info.isSymbolicLink())
         throw new Error('Shared folder is unavailable');
       if (saved.role === 'host') await exclusive(startHost);
+      else if (saved.role === 'cloud') await exclusive(startCloud);
       else await startGuest();
     } catch (error) {
       state.status = 'offline';

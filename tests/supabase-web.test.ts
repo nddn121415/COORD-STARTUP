@@ -12,13 +12,14 @@ const closes: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const close of closes.splice(0)) await close();
 });
-async function fixture(upstream: typeof fetch) {
+async function fixture(upstream: typeof fetch, cloud = false) {
   const handler = createSupabaseHandler({
     url: 'https://example.supabase.co',
     websiteUrl: site,
     publishableKey: 'sb_publishable_public',
     secretKey: secret,
     googleEnabled: true,
+    storageMode: cloud ? 'supabase' : undefined,
     fetch: upstream,
   });
   const routed = routeAccountRequest(handler);
@@ -229,4 +230,108 @@ it('routes rewritten nested Vercel endpoints and preserves browser callback stat
   expect(callback.headers.get('location')).toBe(site + '/');
   for (const route of ['..%2Fadmin', '%2F%2Fevil.example', 'device%2Fstart&__coord_route=config'])
     expect((await call('?__coord_route=' + route)).status).toBe(404);
+});
+
+it('requires the new desktop transport before binding a cloud project', async () => {
+  const upstream = vi.fn<typeof fetch>(async () => Response.json({ ok: true }));
+  const call = await fixture(upstream, true);
+  const project = '22222222-2222-4222-8222-222222222222';
+  const device = {
+    ...json({ peerId: 'a'.repeat(64) }),
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + 'b'.repeat(64) },
+  };
+  expect((await call(`projects/${project}/connect`, device)).status).toBe(426);
+  expect(upstream).not.toHaveBeenCalled();
+  const response = await call(`projects/${project}/connect`, {
+    ...device,
+    body: JSON.stringify({ peerId: 'a'.repeat(64), transport: 'https', projectId: uid }),
+  });
+  expect(await response.json()).toEqual({ transport: 'https', projectId: project });
+  expect(JSON.parse(String(upstream.mock.calls[0]![1]!.body))).toMatchObject({
+    p_user_id: null,
+    p_device_token: 'b'.repeat(64),
+    p_payload: { projectId: project, peerId: 'a'.repeat(64) },
+  });
+});
+
+it('validates cloud file paths, contents and caller identity before using its service credential', async () => {
+  const upstream = vi.fn<typeof fetch>(async () => Response.json({ ok: true }));
+  const call = await fixture(upstream, true);
+  const route = `projects/${uid}/sync`;
+  const body = {
+    peerId: 'a'.repeat(64),
+    sessionId: 'codex-1',
+    operation: 'stage',
+    input: {
+      batchId: uid,
+      path: 'src/main.ts',
+      baseHash: null,
+      contentBase64: Buffer.from('export const works = true;').toString('base64'),
+    },
+  };
+  const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + 'b'.repeat(64) };
+  const post = (value: unknown) =>
+    call(route, { method: 'POST', headers, body: JSON.stringify(value) });
+  expect((await post(body)).status).toBe(200);
+  expect(JSON.parse(String(upstream.mock.calls[0]![1]!.body))).toEqual({
+    p_project_id: uid,
+    p_peer_id: body.peerId,
+    p_session_id: 'codex-1',
+    p_device_token: 'b'.repeat(64),
+    p_operation: 'stage',
+    p_input: body.input,
+  });
+  const rejected = [
+    { ...body, userId: uid },
+    { ...body, sessionId: '../bad' },
+    { ...body, input: { ...body.input, path: '.env' } },
+    { ...body, input: { ...body.input, path: '../outside' } },
+    { ...body, input: { ...body.input, path: '.codex/config.toml' } },
+    {
+      ...body,
+      input: {
+        ...body.input,
+        contentBase64: Buffer.from('AWS_SECRET_ACCESS_KEY="notarealsecret123"').toString('base64'),
+      },
+    },
+    { ...body, input: { ...body.input, contentBase64: 'not-base64' } },
+    { ...body, input: { ...body.input, contentBase64: Buffer.from([255]).toString('base64') } },
+    {
+      ...body,
+      input: { ...body.input, contentBase64: Buffer.alloc(1024 * 1024 + 1, 97).toString('base64') },
+    },
+  ];
+  for (const value of rejected) expect((await post(value)).status).toBe(400);
+  expect(upstream).toHaveBeenCalledTimes(1);
+  expect((await call(route, json(body))).status).toBe(401);
+  expect(upstream).toHaveBeenCalledTimes(1);
+});
+
+it('transfers the largest supported file and propagates reservation and revoked-device errors', async () => {
+  let fail = false;
+  const contentBase64 = Buffer.alloc(1024 * 1024, 97).toString('base64');
+  const upstream = vi.fn<typeof fetch>(async () =>
+    Response.json(
+      fail
+        ? { error: 'Device revoked', status: 403 }
+        : { path: 'large.txt', hash: 'a'.repeat(64), contentBase64 },
+    ),
+  );
+  const call = await fixture(upstream, true);
+  const post = () =>
+    call(`projects/${uid}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + 'b'.repeat(64) },
+      body: JSON.stringify({
+        peerId: 'a'.repeat(64),
+        sessionId: 'folder',
+        operation: 'read',
+        input: { path: 'large.txt' },
+      }),
+    });
+  const response = await post();
+  expect(response.status).toBe(200);
+  expect((await response.json()).contentBase64).toBe(contentBase64);
+  fail = true;
+  expect((await post()).status).toBe(403);
 });

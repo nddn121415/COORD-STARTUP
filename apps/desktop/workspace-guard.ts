@@ -12,52 +12,14 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { join } from 'node:path';
-import { containsSecret, validateRelativePath } from '@coord/protocol';
+import { workspaceLimits, safePath, textBytes } from './workspace-validation.js';
 
 export type SnapshotFile = { path: string; content: string; hash: string };
 export type WorkspaceChange = { path: string; baseHash: string | null; content: string | null };
 export type WorkspaceLock = { path: string; owner: string; expiresAt: number };
-export const workspaceLimits = {
-  files: 500,
-  fileBytes: 1024 * 1024,
-  totalBytes: 16 * 1024 * 1024,
-  leaseMs: 120_000,
-} as const;
+export { workspaceLimits } from './workspace-validation.js';
 const hash = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
 const hashPattern = /^[a-f0-9]{64}$/;
-const blocked = new Set([
-  '.git',
-  '.coord',
-  '.codex',
-  '.claude',
-  '.mcp.json',
-  'node_modules',
-  'dist',
-  'build',
-  'builds',
-  'out',
-  'target',
-  'coverage',
-  '.next',
-  '.nuxt',
-  '.output',
-  '.turbo',
-  '.cache',
-  '.venv',
-  'venv',
-  '__pycache__',
-  '.ds_store',
-]);
-function safePath(path: string) {
-  validateRelativePath(path);
-  if (
-    path
-      .split('/')
-      .some((part) => blocked.has(part.toLowerCase()) || part.toLowerCase().startsWith('.coord-'))
-  )
-    throw new Error('Protected workspace path');
-  return path;
-}
 const pathKey = (path: string) => safePath(path).normalize('NFC').toLowerCase();
 function uniquePaths(paths: string[]) {
   const keys = paths.map(pathKey);
@@ -66,21 +28,6 @@ function uniquePaths(paths: string[]) {
     keys.some((key) => keys.some((other) => key !== other && key.startsWith(other + '/')))
   )
     throw new Error('Duplicate, overlapping or case-colliding paths');
-}
-function textBytes(content: string) {
-  if (typeof content !== 'string') throw new Error('File content must be text');
-  const bytes = Buffer.from(content, 'utf8');
-  if (bytes.length > workspaceLimits.fileBytes) throw new Error('File exceeds 1 MiB');
-  if (content.includes('\0') || bytes.toString('utf8') !== content)
-    throw new Error('Only UTF-8 text files are supported');
-  if (
-    containsSecret(content) ||
-    /\b[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*["']?\s*[=:]\s*["']?[^\s"'`;,$}{]{8,}/i.test(
-      content,
-    )
-  )
-    throw new Error('Credential-like file content is protected');
-  return bytes;
 }
 async function canonicalRoot(root: string) {
   const canonical = await realpath(root);

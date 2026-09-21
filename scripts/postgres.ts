@@ -36,7 +36,7 @@ export async function startTestPostgres() {
   return {
     url: database.url,
     async stop() {
-      await database.stop();
+      await database.stop({ graceful: true });
       await rm(directory, { recursive: true, force: true });
     },
   };

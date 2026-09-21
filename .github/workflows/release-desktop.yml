@@ -31,6 +31,6 @@ jobs:
           cd dist/desktop-release
           shasum -a 256 COORD-*-mac-arm64.dmg COORD-*-mac-arm64.zip > SHA256SUMS.txt
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --prerelease --title "COORD ${GITHUB_REF_NAME#desktop-v} — early testing" --notes "Account sign-in and shared projects. Requires a configured COORD website and always-on hub. Apple silicon, macOS 13+. Ad-hoc signed; not notarized. Existing computer-to-computer key sharing remains available."
+            gh release create "$GITHUB_REF_NAME" --prerelease --title "COORD ${GITHUB_REF_NAME#desktop-v} — early testing" --notes "Account sign-in and shared projects. Uses the configured COORD website and Supabase for HTTPS file sharing; the creator can go offline. Apple silicon, macOS 13+. Ad-hoc signed; not notarized. Existing computer-to-computer key sharing remains available. Files are UTF-8 text, up to 1 MiB each and 16 MiB/500 files per project."
           fi
           gh release upload "$GITHUB_REF_NAME" COORD-*-mac-arm64.dmg COORD-*-mac-arm64.zip SHA256SUMS.txt --clobber

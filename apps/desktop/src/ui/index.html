@@ -14,7 +14,7 @@
   <body>
     <aside>
       <div class="brand"><b>c</b> COORD</div>
-      <p class="eyebrow">LOCAL COLLABORATION</p>
+      <p class="eyebrow">CONNECTED COLLABORATION</p>
       <div class="nav">↔ &nbsp; Shared project</div>
       <p class="sidebar-copy">Your folder.<br />Your agents.<br />Your people.</p>
       <div class="bottom">
@@ -26,7 +26,7 @@
     <main>
       <header>
         <span>Workspace / <strong>Shared project</strong></span
-        ><span class="badge">EARLY ACCESS · 0.7.1</span>
+        ><span class="badge">EARLY ACCESS · 0.8.0</span>
       </header>
       <div class="content">
         <div class="heading">
@@ -39,7 +39,7 @@
         </div>
         <div id="notice" role="status" aria-live="polite" hidden></div>
         <section class="card" id="account-card">
-          <h2>Your collaboration account</h2>
+          <h2>Sign in, pick a project, choose your folder</h2>
           <div id="account-signed-out">
             <label for="website-url">Collaboration website</label
             ><input
@@ -59,11 +59,11 @@
         </section>
         <section id="setup">
           <article class="card service-card">
-            <span class="step">A SHARED PROJECT, ALWAYS AVAILABLE</span>
-            <h2>Connect to shared service</h2>
+            <span class="step">OPTIONAL KEY CONNECTION</span>
+            <h2>Have a computer or service key?</h2>
             <p class="muted">
-              Use a service key to connect your local project folder. A deployed service keeps the
-              project available even when the person who created it goes offline.
+              For website projects, sign in above and select your project. Use this option only when
+              a teammate gives you a computer invite or a separately hosted service key.
             </p>
             <label for="invite">Project access key</label>
             <input
@@ -79,8 +79,8 @@
             </p>
             <button id="join" class="primary">Choose project folder & connect →</button>
             <p class="small muted">
-              This build is ready for your service deployment. No shared service is hosted for you
-              yet. Ask your service administrator for a key after deployment.
+              Website projects sync over the internet through COORD. The creator’s computer can go
+              offline; each collaborator keeps their own local folder.
             </p>
           </article>
           <article class="card temporary-card">
@@ -168,7 +168,7 @@
           </p>
         </div>
         <footer>
-          No Git push or pull. An internet connection and a reachable project host are required.
+          No Git push or pull. Keep COORD running and connected to the internet to share changes.
         </footer>
       </div>
     </main>

@@ -75,8 +75,10 @@ function registerIpc(): void {
           });
           if (!picked.canceled && picked.filePaths[0]) {
             const folder = await realpath(picked.filePaths[0]);
-            const key = await account!.projectKey(value, controller.getDeviceId());
-            await controller.join(key, folder);
+            const connection = await account!.projectConnection(value, controller.getDeviceId());
+            if (connection.transport === 'https')
+              await controller.joinCloud(connection.projectId, folder, connection.website);
+            else await controller.join(connection.key, folder);
           }
           break;
         }
@@ -221,6 +223,23 @@ else {
         (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')
       )
         throw new Error('Unlock your system keychain before opening COORD.');
+      account = await createAccountClient({
+        stateDirectory: app.getPath('userData'),
+        website: __COORD_WEBSITE_URL__,
+        protect: {
+          encryptString(value) {
+            if (!safeStorage.isEncryptionAvailable())
+              throw new Error('Unlock the system keychain.');
+            return safeStorage.encryptString(value);
+          },
+          decryptString(value) {
+            return safeStorage.decryptString(value);
+          },
+        },
+        onChange: () => {
+          if (controller && account) window?.webContents.send('coord:state', state());
+        },
+      });
       controller = await createPeerSession({
         stateDirectory: app.getPath('userData'),
         protect: {
@@ -240,26 +259,15 @@ else {
         onStateChanged: () => {
           if (controller) window?.webContents.send('coord:state', state());
         },
+        cloud: {
+          currentWebsite: () =>
+            account?.getState().signedIn ? account.getState().website : undefined,
+          request: (website, projectId, peerId, sessionId, operation, input) =>
+            account!.sync(projectId, peerId, sessionId, operation, input, website),
+        },
         integration: {
           command: '/usr/bin/env',
           args: ['ELECTRON_RUN_AS_NODE=1', process.execPath, join(__dirname, 'local-mcp.cjs')],
-        },
-      });
-      account = await createAccountClient({
-        stateDirectory: app.getPath('userData'),
-        website: __COORD_WEBSITE_URL__,
-        protect: {
-          encryptString(value) {
-            if (!safeStorage.isEncryptionAvailable())
-              throw new Error('Unlock the system keychain.');
-            return safeStorage.encryptString(value);
-          },
-          decryptString(value) {
-            return safeStorage.decryptString(value);
-          },
-        },
-        onChange: () => {
-          if (controller && account) window?.webContents.send('coord:state', state());
         },
       });
       if (account.getState().signedIn) void account.refresh().catch(() => {});
