@@ -1,7 +1,7 @@
 {
   "name": "@coord/desktop",
   "productName": "COORD",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "Direct collaboration for coding teams",
   "author": "COORD",

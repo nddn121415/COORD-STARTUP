@@ -114,3 +114,18 @@ it.each([false, true])(
     expect(!!client.getState().warning).toBe(offline);
   },
 );
+
+it('explains an unavailable shared service and non-JSON deployment failures', async () => {
+  let html = false;
+  const { client } = await setup(async () =>
+    html
+      ? new Response('<html>Deployment not found</html>', { status: 404 })
+      : Response.json(
+          { error: 'Accounts are ready. The always-on file service has not been deployed yet.' },
+          { status: 503 },
+        ),
+  );
+  await expect(client.signIn()).rejects.toThrow('always-on file service has not been deployed');
+  html = true;
+  await expect(client.signIn()).rejects.toThrow('Check its address and deployment');
+});

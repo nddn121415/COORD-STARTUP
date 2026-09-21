@@ -55,7 +55,7 @@ The hub can read canonical source to validate and publish changes. Encrypting tr
 
 ## Configure Vercel
 
-Import the repository using its root directory, so the root `vercel.json` and account function are included. The current configuration uses framework “Other”, `node scripts/build-web.mjs`, output `dist/web`, and the account function under `api/account`. Keep the checked-in configuration as the source of truth; remove stale dashboard build/output overrides from earlier deployment attempts if they contradict it. Do not select `apps/portal`, the old Sites project, or the Electron app directory as the root for this standalone Vercel website. [Vercel project configuration](https://vercel.com/docs/project-configuration)
+Import the repository using its root directory, so the root `vercel.json` and account function are included. The current configuration uses framework “Other”, `node scripts/build-web.mjs`, output `dist/web`, and the account function `api/account.ts`. The explicit `/api/account/:route*` rewrite is required for nested pairing and project routes; the bare Node runtime does not use Next.js catch-all file routing. Keep the checked-in configuration as the source of truth; remove stale dashboard build/output overrides from earlier deployment attempts if they contradict it. Do not select `apps/portal`, the old Sites project, or the Electron app directory as the root for this standalone Vercel website. [Vercel project configuration](https://vercel.com/docs/project-configuration)
 
 First apply the SQL and configure Supabase Auth as described in [the Supabase setup guide](../supabase/README.md). Set these **server-side** environment variables in the intended Vercel environment:
 

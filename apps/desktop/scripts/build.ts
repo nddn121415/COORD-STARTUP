@@ -18,7 +18,9 @@ await build({
   bundle: true,
   define: {
     __COORD_WEBSITE_URL__: JSON.stringify(
-      process.env.COORD_WEBSITE_URL ? validateWebsite(process.env.COORD_WEBSITE_URL) : '',
+      validateWebsite(
+        process.env.COORD_WEBSITE_URL || 'https://coord-startup-control-plane.vercel.app',
+      ),
     ),
   },
   platform: 'node',

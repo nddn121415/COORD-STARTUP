@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createSupabaseHandler } from '../apps/web-server/supabase.js';
+import { routeAccountRequest } from '../apps/web-server/routing.js';
 const site = 'https://coord.example',
   uid = '11111111-1111-4111-8111-111111111111',
   secret = 'sb_secret_private-key',
@@ -20,7 +21,8 @@ async function fixture(upstream: typeof fetch) {
     googleEnabled: true,
     fetch: upstream,
   });
-  const server = createServer((req, res) => void handler(req, res));
+  const routed = routeAccountRequest(handler);
+  const server = createServer((req, res) => void routed(req, res));
   await new Promise<void>((ok, fail) => {
     server.once('error', fail);
     server.listen(0, '127.0.0.1', ok);
@@ -33,10 +35,17 @@ async function fixture(upstream: typeof fetch) {
       }),
   );
   return (path: string, init: RequestInit = {}) =>
-    fetch('http://127.0.0.1:' + (server.address() as AddressInfo).port + '/api/account/' + path, {
-      ...init,
-      redirect: 'manual',
-    });
+    fetch(
+      'http://127.0.0.1:' +
+        (server.address() as AddressInfo).port +
+        '/api/account' +
+        (path.startsWith('?') ? '' : '/') +
+        path,
+      {
+        ...init,
+        redirect: 'manual',
+      },
+    );
 }
 const json = (body: unknown) => ({
   method: 'POST',
@@ -184,4 +193,40 @@ it('handles email confirmation and preserves native pairing without browser iden
     p_device_token: null,
     p_payload: { name: 'Mac' },
   });
+});
+
+it('routes rewritten nested Vercel endpoints and preserves browser callback state', async () => {
+  const upstream = vi.fn<typeof fetch>(async (url) =>
+    String(url).endsWith('/user')
+      ? Response.json({ id: uid })
+      : String(url).includes('token?')
+        ? Response.json({ access_token: access, refresh_token: refresh })
+        : Response.json({ ok: true }),
+  );
+  const call = await fixture(upstream);
+  const pair = await call('?__coord_route=device%2Fstart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{"name":"Mac"}',
+  });
+  expect(pair.status).toBe(200);
+  expect(JSON.parse(String(upstream.mock.calls[0]![1]!.body)).p_action).toBe('device_start');
+  const project = await call('?__coord_route=projects%2F' + uid, {
+    headers: { Cookie: '__Host-coord_access=' + access },
+  });
+  expect(project.status).toBe(200);
+  expect(JSON.parse(String(upstream.mock.calls.at(-1)![1]!.body))).toMatchObject({
+    p_action: 'project_get',
+    p_payload: { projectId: uid },
+  });
+  const start = await call('google', json({}));
+  const provider = new URL((await start.json()).url);
+  const state = new URL(provider.searchParams.get('redirect_to')!).searchParams.get('state');
+  const callback = await call('?__coord_route=callback&code=one&state=' + state, {
+    headers: { Cookie: start.headers.getSetCookie()[0]!.split(';')[0]! },
+  });
+  expect(callback.status).toBe(303);
+  expect(callback.headers.get('location')).toBe(site + '/');
+  for (const route of ['..%2Fadmin', '%2F%2Fevil.example', 'device%2Fstart&__coord_route=config'])
+    expect((await call('?__coord_route=' + route)).status).toBe(404);
 });

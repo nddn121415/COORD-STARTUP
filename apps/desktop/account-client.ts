@@ -99,13 +99,26 @@ export async function createAccountClient(options: {
     } finally {
       await reader?.cancel().catch(() => {});
     }
-    if (!response.ok)
+    const text = Buffer.concat(chunks).toString('utf8');
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      throw new Error(
+        'The website returned an unexpected response. Check its address and deployment.',
+      );
+    }
+    if (!response.ok) {
+      const detail = z.object({ error: z.string().trim().min(1).max(300) }).safeParse(value);
       throw new Error(
         response.status === 401
           ? 'Sign-in expired. Sign in again.'
-          : `Website request failed (${response.status}).`,
+          : detail.success
+            ? detail.data.error.replace(/[\u0000-\u001f\u007f]/g, ' ')
+            : `Website request failed (${response.status}).`,
       );
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+    }
+    return value;
   }
   async function refresh() {
     const epoch = generation;

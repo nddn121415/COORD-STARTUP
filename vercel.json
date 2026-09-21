@@ -5,11 +5,15 @@
   "buildCommand": "node scripts/build-web.mjs",
   "outputDirectory": "dist/web",
   "functions": {
-    "api/account/[...path].ts": {
+    "api/account.ts": {
       "maxDuration": 60
     }
   },
   "rewrites": [
+    {
+      "source": "/api/account/:route*",
+      "destination": "/api/account?__coord_route=:route*"
+    },
     {
       "source": "/connect",
       "destination": "/index.html"
