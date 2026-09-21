@@ -18,6 +18,7 @@ async function fixture() {
   const guard = await createWorkspaceGuard(canonical);
   const staged = new Map<string, WorkspaceChange[]>();
   let available = true;
+  let disconnectAfterCommit = false;
   const projectId = randomUUID(),
     website = 'https://coord.example';
   const cloudRequest: NonNullable<PeerOptions['cloud']>['request'] = async (
@@ -70,6 +71,10 @@ async function fixture() {
         throw new AccountRequestError(error.message, 409);
       });
       staged.delete(batchKey);
+      if (disconnectAfterCommit) {
+        disconnectAfterCommit = false;
+        available = false;
+      }
       return { ok: true, files };
     }
     if (op === 'abort') staged.delete(batchKey);
@@ -103,6 +108,9 @@ async function fixture() {
     guard,
     projectId,
     website,
+    disconnectAfterNextCommit: () => {
+      disconnectAfterCommit = true;
+    },
     setAvailable: (value: boolean) => {
       available = value;
     },
@@ -201,4 +209,74 @@ it('rejects a cloud response that finishes after a project disconnect', async ()
   await rejected;
   expect(a.peer.getState().status).toBe('idle');
   expect(await readFile(join(a.folder, 'file.ts'), 'utf8')).toBe('original');
+});
+
+it('retains an acknowledged publication baseline when connectivity fails before the next snapshot', async () => {
+  const { client, guard, setAvailable, disconnectAfterNextCommit } = await fixture();
+  const a = await client('a', 'original');
+  disconnectAfterNextCommit();
+  await writeFile(join(a.folder, 'file.ts'), 'acknowledged publication');
+  await a.peer.refresh();
+  expect(a.peer.getState().status).toBe('offline');
+  expect((await guard.snapshot())[0].content).toBe('acknowledged publication');
+  await writeFile(join(a.folder, 'file.ts'), 'new offline draft');
+  setAvailable(true);
+  await a.peer.refresh();
+  expect(a.peer.getState().status).toBe('connected');
+  expect(a.peer.getState().conflicts).toEqual([]);
+  expect((await guard.snapshot())[0].content).toBe('new offline draft');
+  expect(await readFile(join(a.folder, 'file.ts'), 'utf8')).toBe('new offline draft');
+});
+
+it('records submitted bytes without overwriting a newer edit made during publication', async () => {
+  const { client, guard } = await fixture();
+  const a = await client('a', 'original');
+  const originalRequest = a.options.cloud!.request;
+  let changeDuringCommit = true;
+  a.options.cloud!.request = async (...args) => {
+    const response = await originalRequest(...args);
+    if (args[4] === 'commit' && changeDuringCommit) {
+      changeDuringCommit = false;
+      await writeFile(join(a.folder, 'file.ts'), 'newer local draft');
+    }
+    return response;
+  };
+  await writeFile(join(a.folder, 'file.ts'), 'submitted bytes');
+  await a.peer.refresh();
+  expect((await guard.snapshot())[0].content).toBe('submitted bytes');
+  expect(await readFile(join(a.folder, 'file.ts'), 'utf8')).toBe('newer local draft');
+  await a.peer.refresh();
+  expect((await guard.snapshot())[0].content).toBe('newer local draft');
+  expect(a.peer.getState().conflicts).toEqual([]);
+});
+it('preserves a real remote conflict when a publication response is lost', async () => {
+  const { client, guard, setAvailable } = await fixture();
+  const a = await client('a', 'original');
+  const originalRequest = a.options.cloud!.request;
+  let loseCommitReply = true;
+  a.options.cloud!.request = async (...args) => {
+    const response = await originalRequest(...args);
+    if (args[4] === 'commit' && loseCommitReply) {
+      loseCommitReply = false;
+      setAvailable(false);
+      throw new AccountRequestError('Commit acknowledgment lost', 503);
+    }
+    return response;
+  };
+  await writeFile(join(a.folder, 'file.ts'), 'uncertain publication');
+  await a.peer.refresh();
+  expect(a.peer.getState().status).toBe('offline');
+  const shared = (await guard.snapshot())[0];
+  await guard.release(a.peer.getDeviceId() + ':folder');
+  await guard.reserve('other-device', ['file.ts']);
+  await guard.publish('other-device', [
+    { path: 'file.ts', baseHash: shared.hash, content: 'another collaborator edit' },
+  ]);
+  await guard.release('other-device');
+  await writeFile(join(a.folder, 'file.ts'), 'offline draft');
+  setAvailable(true);
+  await a.peer.refresh();
+  expect(a.peer.getState().conflicts).toEqual(['file.ts']);
+  expect((await guard.snapshot())[0].content).toBe('another collaborator edit');
+  expect(await readFile(join(a.folder, 'file.ts'), 'utf8')).toBe('offline draft');
 });

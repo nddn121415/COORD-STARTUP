@@ -678,7 +678,35 @@ export async function createPeerSession(options: PeerOptions) {
             { paths: [change.path], summary: 'Local folder changes' },
             'folder',
           );
-          await request('publish', { changes: [change] }, 'folder');
+          const receipt = z
+            .object({
+              files: z.array(z.object({ path: z.string(), hash: hex.nullable() })).length(1),
+            })
+            .parse(await request('publish', { changes: [change] }, 'folder'));
+          assertCurrent();
+          const submittedHash =
+            change.content === null
+              ? null
+              : createHash('sha256').update(change.content).digest('hex');
+          if (receipt.files[0]!.path !== change.path || receipt.files[0]!.hash !== submittedHash)
+            throw new Error('The publication acknowledgment did not match the submitted file.');
+          // A confirmed publication is already our new base, even if the next
+          // snapshot fails. Record only the submitted bytes; an editor may have
+          // created a newer local draft while this request was in flight.
+          if (change.content === null) {
+            delete saved.baseline[change.path];
+            canonical.delete(change.path);
+          } else {
+            saved.baseline[change.path] = submittedHash!;
+            canonical.set(change.path, {
+              path: change.path,
+              content: change.content,
+              hash: submittedHash!,
+            });
+          }
+          lastSnapshot = [...canonical.values()];
+          digest = snapshotDigest(lastSnapshot);
+          await save();
         } catch (error) {
           // Contention stays local; an outage ends this cycle rather than timing out once per file.
           if (
