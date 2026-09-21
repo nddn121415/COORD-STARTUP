@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>COORD · Your team, in sync</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/main.js"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">◈ <span>COORD</span></a>
+      <nav>
+        <a href="#how">How it works</a><a href="/download">Download</a><span id="identity"></span
+        ><button id="logout" hidden>Sign out</button>
+      </nav>
+    </header>
+    <main>
+      <section class="intro">
+        <div class="eyebrow">A SHARED WORKSPACE FOR YOUR CODING AGENTS</div>
+        <h1>Different computers.<br />One coordinated team.</h1>
+        <p>
+          Choose your local project folder. Bring your teammates and their agents together, with
+          shared files and visibility into what everyone is working on.
+        </p>
+        <div class="chips">
+          <span>Local project folders</span><span>Shared project access</span
+          ><span>Protected file publishing</span>
+        </div>
+      </section>
+      <p id="notice" role="status" aria-live="polite" hidden></p>
+      <section id="auth" class="panel">
+        <div>
+          <div class="eyebrow">YOUR WORKSPACE</div>
+          <h2>Sign in to COORD</h2>
+          <p>Use the same account on the website and your desktop app.</p>
+        </div>
+        <form id="auth-form">
+          <label
+            >Username<input
+              name="username"
+              autocomplete="username"
+              pattern="[a-zA-Z0-9_]{3,32}"
+              minlength="3"
+              maxlength="32"
+              placeholder="your_name"
+              required /></label
+          ><label
+            >Password<input
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              minlength="12"
+              maxlength="128"
+              placeholder="At least 12 characters"
+              required
+          /></label>
+          <div class="actions">
+            <button class="primary" type="submit">Sign in</button
+            ><button type="button" id="register">Create account</button>
+          </div>
+          <small
+            >Early testing uses a username and password. Password recovery is not available
+            yet.</small
+          >
+        </form>
+      </section>
+      <section id="pairing" class="panel" hidden>
+        <div>
+          <div class="eyebrow">CONNECT YOUR COMPUTER</div>
+          <h2>Approve desktop sign-in</h2>
+          <p>
+            Only approve a code displayed by COORD on your own computer. This gives that app access
+            to your shared projects.
+          </p>
+        </div>
+        <form id="pair-form">
+          <label
+            >Code shown in the desktop app<input
+              name="code"
+              maxlength="20"
+              autocomplete="off"
+              required /></label
+          ><button class="primary">Approve this computer</button>
+        </form>
+      </section>
+      <section id="workspace" hidden>
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">YOUR TEAM SPACE</div>
+            <h2>Projects</h2>
+          </div>
+          <button id="refresh">Refresh</button>
+        </div>
+        <div id="projects" class="projects"></div>
+        <div class="two">
+          <form id="create-form" class="card">
+            <h3>Start a shared project</h3>
+            <p>Your files connect when you select a folder in the desktop app.</p>
+            <label
+              >Project name<input
+                name="name"
+                maxlength="100"
+                placeholder="My project"
+                required /></label
+            ><button class="primary">Create project</button>
+          </form>
+          <form id="join-form" class="card">
+            <h3>Join your team</h3>
+            <p>Ask a project owner for a one-time invitation key.</p>
+            <label>Invitation key<input name="key" autocomplete="off" required /></label
+            ><button>Join project</button>
+          </form>
+        </div>
+      </section>
+      <section id="detail" class="panel detail" hidden></section>
+      <section class="download card" id="download">
+        <div>
+          <div class="eyebrow">COORD FOR MAC</div>
+          <h2>Your workspace stays with you.</h2>
+          <p>Runs in the background while you work in Codex or Claude Code.</p>
+          <small>Early-test build · Apple silicon · macOS 13+ · Not notarized</small>
+        </div>
+        <a
+          class="button primary"
+          href="https://github.com/nddn121415/COORD-STARTUP/releases/tag/desktop-v0.7.0"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Get the desktop app ↗</a
+        >
+      </section>
+      <section id="how">
+        <div class="section-heading"><h2>From download to working together.</h2></div>
+        <div class="three">
+          <div class="card">
+            <span class="step">01</span>
+            <h3>Make a team space</h3>
+            <p>
+              Create an account and a project. Share an invitation key with someone you want to
+              collaborate with.
+            </p>
+          </div>
+          <div class="card">
+            <span class="step">02</span>
+            <h3>Connect your folder</h3>
+            <p>
+              Open the desktop app, sign in through this website, select the project and choose a
+              folder on your computer.
+            </p>
+          </div>
+          <div class="card">
+            <span class="step">03</span>
+            <h3>Work with your agents</h3>
+            <p>
+              Reload your coding sessions and approve the project integration. Agents can check team
+              activity and reserve files before publishing changes.
+            </p>
+          </div>
+        </div>
+        <p class="footnote">
+          Shared publishing rejects conflicting changes. Ordinary editor writes cannot be blocked by
+          COORD; divergent local files are preserved for review. The shared service must be online,
+          and peer connectivity must be available.
+        </p>
+      </section>
+    </main>
+    <footer>
+      <a class="brand" href="/">◈ COORD</a><span>Made for people building together.</span>
+    </footer>
+  </body>
+</html>

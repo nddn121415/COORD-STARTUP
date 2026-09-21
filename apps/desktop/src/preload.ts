@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 const allowed = new Set([
   'state',
+  'account-signin',
+  'account-signout',
+  'account-projects',
+  'account-connect',
   'host',
   'join',
   'copy',

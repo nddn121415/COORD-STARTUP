@@ -11,6 +11,7 @@ services:
       COORD_HUB_HOST: 127.0.0.1
       COORD_HUB_PORT: 4200
       COORD_HUB_ADMIN_TOKEN: ${COORD_HUB_ADMIN_TOKEN:?Set a random administration token}
+      COORD_PORTAL_TOKEN: ${COORD_PORTAL_TOKEN:-}
     volumes:
       - coord_hub_data:/data
     security_opt:

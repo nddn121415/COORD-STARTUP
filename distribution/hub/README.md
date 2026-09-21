@@ -1,6 +1,6 @@
-# COORD always-on hub — prepared for later deployment
+# COORD always-on hub deployment
 
-These files prepare an always-on Linux server. Nothing is provisioned or published by adding them. The private website does not need to become public.
+These files prepare an always-on Linux server. Nothing is provisioned or published by adding them. For the account-enabled early-testing website, follow [the Vercel setup guide](../../docs/vercel-early-testing.md) as well.
 
 The hub becomes the project authority: it stores the canonical shared source, approves connection keys, tracks file reservations, and accepts guarded changes. The person who created a project can close their laptop while other members keep working, provided the hub remains online. Desktop clients still need an active network connection for shared publication; isolated edits remain local while disconnected.
 
@@ -51,7 +51,7 @@ node --env-file=/path/to/private/hub.env dist/hub.js
 
 Keep the full `dist` directory and installed dependencies together: the hub bundle imports shared generated chunks. For unattended operation, configure your host's process supervisor to run this command under a dedicated account and restart it after failures or reboot. An interactive terminal alone does not provide always-on service. Do not run the native process and Docker hub against the same directory simultaneously.
 
-## Create a project and invite collaborators
+## Private operator administration
 
 Load `COORD_HUB_ADMIN_TOKEN` into your administration shell from your secret manager or private environment file. Set `COORD_HUB_URL` to the loopback address or your HTTPS origin.
 
@@ -85,7 +85,13 @@ When you later choose to publish this endpoint, point a hostname you control at 
 docker compose --env-file /path/to/private/hub.env -f compose.hub.yaml --profile https up -d
 ```
 
-Caddy obtains and renews TLS certificates. Keep port 4200 bound to loopback. Set `COORD_HUB_URL=https://your-hostname` for administration. The API requires bearer authentication for all `/v1` routes and does not accept browser-origin administration. No user website or website account is required for this setup.
+Caddy obtains and renews TLS certificates. Keep port 4200 bound to loopback. Set `COORD_HUB_URL=https://your-hostname` for administration. The API requires bearer authentication for all `/v1` routes and does not accept browser-origin administration. The legacy `/v1` operator workflow does not require website accounts. The account-enabled website uses a separate server-side `COORD_PORTAL_TOKEN` and the hub account API; configure the same portal token on the hub and Vercel, and expose the hub through HTTPS. Never give the website the administration token.
+
+## Website accounts and the tester experience
+
+For the new website flow, set `COORD_PORTAL_TOKEN` to a separate random 64-hex-character value in the private hub environment file. Set that same secret and `COORD_HUB_URL=https://your-hub-hostname` in Vercel, then redeploy the website. Confirm Compose passes the portal token into the hub container. The website serves account/project actions; the continuously running hub remains responsible for peer identities, memberships, reservations, and canonical source.
+
+Testers create or sign into their own account, share and accept one-use membership invitations, download the matching desktop build, and choose a local project folder. They do not use the operator commands above or receive either service secret. See [Vercel early-testing setup](../../docs/vercel-early-testing.md) for the deployment sequence, download/signing boundary, and two-computer acceptance checks.
 
 ## Data and recovery
 

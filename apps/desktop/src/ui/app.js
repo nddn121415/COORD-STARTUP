@@ -24,6 +24,28 @@ function row(title, detail) {
 }
 function render(state) {
   latest = state;
+  const account = state.account || {};
+  $('account-signed-out').hidden = !!account.signedIn;
+  $('account-signed-in').hidden = !account.signedIn;
+  if (document.activeElement !== $('website-url')) $('website-url').value = account.website || '';
+  $('account-user').textContent =
+    account.user?.name || account.user?.username || account.user?.email || 'Signed in';
+  $('account-error').textContent = [account.error, account.warning].filter(Boolean).join(' ');
+  $('account-pairing').textContent = account.pairing
+    ? 'Approve code ' +
+      account.pairing.userCode +
+      ' in your browser. This window updates automatically.'
+    : '';
+  $('account-project-list').replaceChildren();
+  for (const project of account.projects || []) {
+    const el = row(project.name, project.role);
+    const button = text('button', 'Choose folder & connect', 'secondary');
+    button.onclick = () => act('account-connect', project.id);
+    el.append(button);
+    $('account-project-list').append(el);
+  }
+  if (account.signedIn && !(account.projects || []).length)
+    empty($('account-project-list'), 'Create or join a project on the website, then refresh.');
   $('status').textContent = state.status || 'Idle';
   $('login').checked = !!state.startAtLogin;
   const active = !!state.folder;
@@ -124,6 +146,9 @@ async function act(action, value) {
 }
 for (const action of ['host', 'copy', 'disconnect', 'reveal', 'quit'])
   $(action).onclick = () => act(action);
+$('account-signin').onclick = () => act('account-signin', $('website-url').value);
+$('account-signout').onclick = () => act('account-signout');
+$('account-projects').onclick = () => act('account-projects');
 $('invite-refresh').onclick = () => act('invite');
 $('invite').oninput = () => {
   let computer = false;

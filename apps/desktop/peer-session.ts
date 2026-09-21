@@ -142,6 +142,7 @@ export type PeerOptions = {
   pollMs?: number;
   /** Trusted server-only mode. Redeeming an unexpired single-use capability authorizes a device. */
   autoApproveInvitations?: boolean;
+  authorizePeer?: (peerId: string) => boolean;
   /** Disable observing/mirroring the headless server's provisioning folder. */
   watchFolder?: boolean;
 };
@@ -232,17 +233,34 @@ export async function createPeerSession(options: PeerOptions) {
     }
     options.onStateChanged?.(structuredClone(state));
   }
-  function renewInvite() {
+  const peerInvitations = new Map<string, z.infer<typeof inviteSchema>>();
+  const peerAllowed = (id: string) => {
+    try {
+      return options.authorizePeer?.(id) !== false;
+    } catch {
+      return false;
+    }
+  };
+  function renewInvite(peerId?: string) {
+    if (peerId !== undefined) hex.parse(peerId);
+    for (const [id, value] of peerInvitations) {
+      if (value.expiresAt <= Date.now()) peerInvitations.delete(id);
+    }
+    if (peerId && !peerInvitations.has(peerId) && peerInvitations.size >= 100) {
+      throw new Error('Too many outstanding device invitations');
+    }
     if (!saved.project) throw new Error('Choose a shared folder first');
-    invitation = {
-      version: 1,
+    const next = {
+      version: 1 as const,
       ...(options.autoApproveInvitations ? { service: true as const } : {}),
       host: deviceId,
       project: saved.project,
       token: randomBytes(32).toString('hex'),
       expiresAt: Date.now() + 10 * 60_000,
     };
-    state.key = `coord1.${Buffer.from(JSON.stringify(invitation)).toString('base64url')}`;
+    if (peerId) peerInvitations.set(peerId, next);
+    else invitation = next;
+    state.key = `coord1.${Buffer.from(JSON.stringify(next)).toString('base64url')}`;
     emit();
   }
   function expireActivity() {
@@ -638,6 +656,8 @@ export async function createPeerSession(options: PeerOptions) {
   }
   async function stopNetwork() {
     generation++;
+    invitation = undefined;
+    peerInvitations.clear();
     authenticated = false;
     for (const socket of acceptedSockets) socket.destroy();
     acceptedSockets.clear();
@@ -691,7 +711,7 @@ export async function createPeerSession(options: PeerOptions) {
             })
             .strict()
             .parse(value);
-          if (data.project !== saved.project) {
+          if (data.project !== saved.project || !peerAllowed(id)) {
             c.close();
             return;
           }
@@ -704,10 +724,16 @@ export async function createPeerSession(options: PeerOptions) {
             emit();
             return;
           }
+          const bound = peerInvitations.get(id);
+          const offered =
+            bound &&
+            timingSafeEqual(Buffer.from(data.token, 'hex'), Buffer.from(bound.token, 'hex'))
+              ? bound
+              : invitation;
           if (
-            !invitation ||
-            invitation.expiresAt <= Date.now() ||
-            !timingSafeEqual(Buffer.from(data.token, 'hex'), Buffer.from(invitation.token, 'hex'))
+            !offered ||
+            offered.expiresAt <= Date.now() ||
+            !timingSafeEqual(Buffer.from(data.token, 'hex'), Buffer.from(offered.token, 'hex'))
           ) {
             c.close();
             return;
@@ -718,7 +744,8 @@ export async function createPeerSession(options: PeerOptions) {
               return;
             }
             // Consume synchronously before persistence so two sockets cannot redeem one key.
-            invitation = undefined;
+            if (offered === bound) peerInvitations.delete(id);
+            else invitation = undefined;
             state.key = undefined;
             const epoch = generation,
               project = saved.project;
@@ -730,7 +757,13 @@ export async function createPeerSession(options: PeerOptions) {
               c.close();
               return;
             }
-            if (epoch !== generation || saved.project !== project || c.socket.destroyed) {
+            if (
+              epoch !== generation ||
+              saved.project !== project ||
+              c.socket.destroyed ||
+              !saved.approved[id] ||
+              !peerAllowed(id)
+            ) {
               c.close();
               return;
             }
@@ -757,7 +790,7 @@ export async function createPeerSession(options: PeerOptions) {
             authorized = true;
             clearTimeout(timeout);
           }
-          if (!authorized) {
+          if (!authorized || !saved.approved[id] || channels.get(id) !== c || !peerAllowed(id)) {
             c.close();
             return;
           }
@@ -772,11 +805,12 @@ export async function createPeerSession(options: PeerOptions) {
             .strict()
             .parse(value);
           try {
-            c.send({
-              type: 'reply',
-              id: data.id,
-              result: await authority(data.operation, data.input, `${id}:${data.sessionId}`),
-            });
+            const result = await authority(data.operation, data.input, `${id}:${data.sessionId}`);
+            if (!saved.approved[id] || channels.get(id) !== c || !peerAllowed(id)) {
+              c.close();
+              return;
+            }
+            c.send({ type: 'reply', id: data.id, result });
           } catch (error) {
             c.send({
               type: 'reply',
@@ -985,8 +1019,19 @@ export async function createPeerSession(options: PeerOptions) {
     async approve(id: string) {
       const peer = pending.get(id);
       if (!peer) throw new Error('Connection request is no longer available');
+      const epoch = generation;
       saved.approved[id] = peer.name;
       await save();
+      if (
+        epoch !== generation ||
+        !saved.approved[id] ||
+        pending.get(id) !== peer ||
+        peer.channel.socket.destroyed ||
+        !peerAllowed(id)
+      ) {
+        peer.channel.close();
+        return;
+      }
       pending.delete(id);
       channels.set(id, peer.channel);
       peer.channel.send({ type: 'approved' });
@@ -1000,6 +1045,7 @@ export async function createPeerSession(options: PeerOptions) {
       emit();
     },
     async revoke(id: string) {
+      peerInvitations.delete(id);
       delete saved.approved[id];
       channels.get(id)?.close();
       pending.get(id)?.channel.close();
@@ -1007,8 +1053,9 @@ export async function createPeerSession(options: PeerOptions) {
       renewInvite();
       emit();
     },
-    async invite() {
-      renewInvite();
+    getDeviceId: () => deviceId,
+    async invite(peerId?: string) {
+      renewInvite(peerId);
     },
     async refresh() {
       await synchronize();

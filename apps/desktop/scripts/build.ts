@@ -1,3 +1,4 @@
+import { validateWebsite } from '../account-client.js';
 import { build } from 'esbuild';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -15,6 +16,11 @@ await build({
   outdir: out,
   outExtension: { '.js': '.cjs' },
   bundle: true,
+  define: {
+    __COORD_WEBSITE_URL__: JSON.stringify(
+      process.env.COORD_WEBSITE_URL ? validateWebsite(process.env.COORD_WEBSITE_URL) : '',
+    ),
+  },
   platform: 'node',
   format: 'cjs',
   target: 'node24',

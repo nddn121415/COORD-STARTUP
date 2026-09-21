@@ -6,23 +6,19 @@ Codex and Claude Code stay local, in their existing workflows. COORD tracks task
 
 This is a functional developer prototype, with real PostgreSQL persistence, authenticated WebSockets, local Git observation and an official SDK MCP server. It is not a production identity service. Automated tests exercise two independent connectors and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
 
-## Always-on collaboration service (0.6 preparation)
+## Account website and desktop (0.7 early testing)
 
-The new service mode removes the original contributor's laptop as the project authority. An always-on COORD hub stores the shared source, keeps device identities, and grants exclusive file reservations. All desktop users connect as clients, so the original contributor can go offline while the others continue working.
+The new website supports username/password accounts, shared projects, one-use membership invitations, desktop sign-in approval, and access removal. The desktop runs in the background: sign in through the website, choose a project, and select a local folder. Existing key-based computer sharing remains available.
 
-**Deployment is prepared, not live.** Use the [hub deployment guide](distribution/hub/README.md) to run one persistent Node24/Linux service (or the supplied Docker Compose deployment). The project registry uses SQLite; shared files and device state live in its persistent private data directory. The server can read the shared source. No GitHub transport or public website is required.
+**The source is deployment-ready; hosting still needs configuration.** Vercel serves the website and a secure account API proxy. A separate always-on Node24/Linux hub stores accounts, sessions and memberships in SQLite, plus shared source and device identities on its persistent private disk. The original contributor's computer can go offline while others continue. Git is not the live sharing transport. The hub operator can read shared source.
 
-The 0.6 desktop understands service invitation keys and can seed a new shared project from an existing local folder. Existing 0.5 rooms remain computer-hosted; they are not migrated automatically. The published 0.5 installer below does not support service keys. Use the 0.6 build after deploying the hub.
+Follow the [Vercel and hub setup guide](docs/vercel-early-testing.md). Use the repository root in Vercel with the checked-in configuration. Set its server-side COORD_HUB_URL and COORD_PORTAL_TOKEN after deploying the hub. A Vercel-protected preview cannot be used directly by the desktop client. The old apps/portal Sites preview remains separate.
 
-## Local-first desktop app
+[**COORD 0.7 Mac prerelease**](https://github.com/nddn121415/COORD-STARTUP/releases/tag/desktop-v0.7.0) targets Apple silicon/macOS13+. The tag-triggered desktop workflow builds and publishes its installer; availability depends on that workflow succeeding. It is ad-hoc signed, not Apple-notarized. Configure the website address in the app for early testing; release builders can set COORD_WEBSITE_URL to a stable production origin.
 
-[**Download COORD for Mac (Apple silicon)**](https://github.com/nddn121415/COORD-STARTUP/releases/download/desktop-v0.5.0/COORD-0.5.0-mac-arm64.dmg)
+Each connected MCP process can create an isolated working directory, reserve files and submit guarded changes. Overlapping reservations and stale publications are rejected; conflicting local edits are retained. Arbitrary shell/editor writes are not intercepted, and internal subagents sharing one MCP process are not automatically distinguished. Existing coding sessions need a reload and normal trust/MCP approval. Remote agent execution and password recovery are not implemented.
 
-**Choose a local folder, copy a connection key, and approve your teammate.** The desktop app runs in the menu bar, automatically synchronizes supported files through exclusive reservations and base-hash checks, and configures project-scoped Codex/Claude tools. It requires no website account or GitHub repository.
-
-Each connected MCP process can create its own isolated working directory, reserve files, and submit guarded changes. Overlapping reservations and stale publications are rejected; conflicting local edits are retained. Arbitrary shell/editor writes are not intercepted, and internal subagents sharing one MCP process are not automatically distinguished. Existing coding sessions may need a reload and the tool's normal trust/MCP approval.
-
-See the [two-Mac testing walkthrough and exact limits](docs/LOCAL_DESKTOP.md). The Mac build targets Apple silicon/macOS13+, includes its runtime, and is currently ad-hoc signed (not yet Apple-notarized). The original account-based collaboration website remains a private preview and is not required by the new desktop flow.
+For the native flow see [desktop setup](apps/desktop/README.md). The [older two-Mac key walkthrough](docs/LOCAL_DESKTOP.md) remains useful for computer-hosted testing. Published desktop0.5 does not support account or service sign-in.
 
 ## Download and try file transfer
 

@@ -1,10 +1,19 @@
 # COORD desktop
 
-A native Electron app for project pairing, teammate discovery, explicit file sharing, and Codex/Claude connections. It includes its own Node runtime; recipients do not need Node, pnpm, a terminal, or Git to exchange files.
+COORD runs in the menu bar and connects local project folders to a shared coordination service or an approved teammate’s computer. The app bundles its runtime: teammates do not need Node, pnpm, Git, or a terminal.
+
+## Account connection
+
+1. Open COORD and enter your collaboration website’s HTTPS origin.
+2. Choose **Sign in through website**. Approve the displayed code in the browser using your website account. The app updates automatically.
+3. Choose a project from your account, then select its local folder. The website issues a connection invitation bound to this computer’s public identity.
+4. Open a fresh trusted Codex or Claude session in the selected project. COORD installs the project integration automatically; existing sessions may need to reload their MCP configuration.
+
+The browser opens `/connect?code=<userCode>`. Device credentials remain in the native process, encrypted using the OS keychain. The renderer sees the account name, project list, and approval code, never the session token or device polling secret.
+
+Invite-key pairing remains available. Service projects remain available while the service is online. Temporary computer-hosted projects require their host computer to remain online. Selecting an existing folder does not grant permission to overwrite divergent local files.
 
 ## Development
-
-From the repository root:
 
 ```sh
 pnpm install
@@ -12,20 +21,18 @@ pnpm --filter @coord/desktop build
 pnpm --filter @coord/desktop start
 ```
 
-The build targets `https://coord-team.waledblack14.chatgpt.site`. Set `COORD_PORTAL_URL` during the build to use another HTTPS portal or a local development endpoint. This address is compiled into the app; the renderer cannot change it.
+Set `COORD_WEBSITE_URL` at build time to your stable production HTTPS origin. Without it, users enter their website address. An HTTPS origin override is available in the sign-in screen; HTTP is permitted only for loopback development hosts. No transient preview address is compiled into the default build.
 
 ## Build the Mac download
 
 ```sh
-pnpm --filter @coord/desktop package
+COORD_WEBSITE_URL=https://your-site.example pnpm --filter @coord/desktop package
 ```
 
-Outputs appear in `dist/desktop-release/`: a real `COORD.app`, ZIP, and drag-to-Applications DMG. The current native build targets Apple Silicon on macOS 13 or later. The Electron runtime and native peer-network libraries are included. Builds use an explicit ad-hoc signature and are **not notarized**. Normal trusted public distribution requires a Developer ID Application certificate and Apple notarization credentials; use electron-builder's signing configuration in the release environment. Do not ask recipients to disable macOS security.
+`dist/desktop-release/` contains `mac-arm64/COORD.app`, a ZIP, and a drag-to-Applications DMG. Builds target Apple Silicon and macOS 13+. Native networking and the MCP executable are included. Local builds are ad-hoc signed, not notarized. Trusted public distribution requires a Developer ID Application certificate and Apple notarization credentials. Do not disable macOS security to distribute the app.
 
-The source icon is reproducible using `node --import tsx apps/desktop/scripts/icon.ts` on macOS. It creates the PNG and ICNS under `assets/`.
+## Coordination boundaries
 
-## Security boundaries
+Each MCP process receives a distinct identity and can create an isolated working directory. Agents reserve files before changing them and submit through ownership and base-version checks. Rejected reservations require working elsewhere, waiting, or releasing ownership. COORD does not inspect private conversations or distinguish internal subagents sharing one MCP process. Arbitrary editor or shell writes outside its tools are not intercepted; divergent local changes are preserved and surfaced for review.
 
-The renderer loads only packaged local assets, uses a restrictive content security policy, runs sandboxed with context isolation, and has no Node integration. The preload exposes a fixed action list. The main process verifies each IPC request comes from the exact local main frame. Folder and file paths come from native selection dialogs. Incoming files remain in an isolated review folder, with an explicit button to open that folder. No received file is executed or automatically applied.
-
-System keychain encryption protects the device credentials. Only the configured website origin can open through the app. Public Internet transfers attempt direct peer networking and can fall back to an encrypted relay; the received-file panel reports the route. The local MCP bridge keeps the website credential in the desktop process; installed agents use a private local bridge file and the app's bundled runtime. COORD must remain running for those agent connections.
+The renderer is sandboxed, has no Node integration, uses a restrictive content security policy, and loads packaged assets only. Main-process IPC validates the exact originating frame. Account requests reject redirects, cap response size, time out, and send credentials only to the selected website origin. Account state is persisted through OS encryption in an owner-only file. The private local MCP bridge does not expose website tokens to agents.

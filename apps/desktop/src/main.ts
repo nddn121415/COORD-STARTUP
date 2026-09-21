@@ -15,6 +15,9 @@ import type { IpcMainInvokeEvent } from 'electron';
 import { join } from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { createAccountClient } from '../account-client.js';
+declare const __COORD_WEBSITE_URL__: string;
+let account: Awaited<ReturnType<typeof createAccountClient>> | undefined;
 import { createPeerSession } from '../peer-session.js';
 let window: BrowserWindow | null = null;
 let tray: Tray | undefined;
@@ -32,7 +35,11 @@ function authorize(event: IpcMainInvokeEvent): void {
     throw new Error('Untrusted desktop request');
 }
 function state() {
-  return { ...controller!.getState(), startAtLogin: app.getLoginItemSettings().openAtLogin };
+  return {
+    ...controller!.getState(),
+    account: account?.getState(),
+    startAtLogin: app.getLoginItemSettings().openAtLogin,
+  };
 }
 function registerIpc(): void {
   ipcMain.handle('coord:action', async (event, action: unknown, value: unknown) => {
@@ -42,6 +49,37 @@ function registerIpc(): void {
       switch (action) {
         case 'state':
           break;
+        case 'account-signin': {
+          if (value !== undefined && (typeof value !== 'string' || value.length > 2048))
+            throw new Error('Enter a website address.');
+          await controller.disconnect();
+          const url = await account!.signIn(value as string | undefined);
+          await shell.openExternal(url);
+          break;
+        }
+        case 'account-signout':
+          try {
+            await controller.disconnect();
+          } finally {
+            await account!.signOut();
+          }
+          break;
+        case 'account-projects':
+          await account!.refresh();
+          break;
+        case 'account-connect': {
+          if (typeof value !== 'string') throw new Error('Choose a project.');
+          const picked = await dialog.showOpenDialog(window!, {
+            title: 'Choose your local project folder',
+            properties: ['openDirectory', 'createDirectory'],
+          });
+          if (!picked.canceled && picked.filePaths[0]) {
+            const folder = await realpath(picked.filePaths[0]);
+            const key = await account!.projectKey(value, controller.getDeviceId());
+            await controller.join(key, folder);
+          }
+          break;
+        }
         case 'host':
         case 'join': {
           if (
@@ -207,6 +245,24 @@ else {
           args: ['ELECTRON_RUN_AS_NODE=1', process.execPath, join(__dirname, 'local-mcp.cjs')],
         },
       });
+      account = await createAccountClient({
+        stateDirectory: app.getPath('userData'),
+        website: __COORD_WEBSITE_URL__,
+        protect: {
+          encryptString(value) {
+            if (!safeStorage.isEncryptionAvailable())
+              throw new Error('Unlock the system keychain.');
+            return safeStorage.encryptString(value);
+          },
+          decryptString(value) {
+            return safeStorage.decryptString(value);
+          },
+        },
+        onChange: () => {
+          if (controller && account) window?.webContents.send('coord:state', state());
+        },
+      });
+      if (account.getState().signedIn) void account.refresh().catch(() => {});
       registerIpc();
       createTray();
       await createWindow();
@@ -223,6 +279,7 @@ else {
     if (quitting) return;
     event.preventDefault();
     quitting = true;
+    account?.dispose();
     void Promise.resolve(controller?.dispose()).finally(() => app.quit());
   });
   app.on('window-all-closed', () => {

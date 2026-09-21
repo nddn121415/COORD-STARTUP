@@ -1,0 +1,36 @@
+name: Desktop prerelease
+on:
+  push:
+    tags: ['desktop-v*']
+permissions:
+  contents: write
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check tag matches app version
+        run: node -e 'const p=require("./apps/desktop/package.json"); if(process.env.GITHUB_REF_NAME !== "desktop-v"+p.version) process.exit(1)'
+      - run: pnpm verify
+      - run: pnpm --dir apps/desktop build
+      - run: pnpm --dir apps/desktop exec electron-builder --mac zip dmg --arm64
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Publish early-test installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist/desktop-release
+          shasum -a 256 COORD-*-mac-arm64.dmg COORD-*-mac-arm64.zip > SHA256SUMS.txt
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --prerelease --title "COORD ${GITHUB_REF_NAME#desktop-v} — early testing" --notes "Account sign-in and shared projects. Requires a configured COORD website and always-on hub. Apple silicon, macOS 13+. Ad-hoc signed; not notarized. Existing computer-to-computer key sharing remains available."
+          fi
+          gh release upload "$GITHUB_REF_NAME" COORD-*-mac-arm64.dmg COORD-*-mac-arm64.zip SHA256SUMS.txt --clobber

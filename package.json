@@ -30,7 +30,9 @@
     "check:peer-package": "node --import tsx scripts/check-peer-package.ts",
     "hub:start": "node --env-file-if-exists=.env dist/hub.js",
     "hub:dev": "node --import tsx --env-file-if-exists=.env apps/hub/main.ts",
-    "hub:admin": "node --import tsx --env-file-if-exists=.env scripts/hub-admin.ts"
+    "hub:admin": "node --import tsx --env-file-if-exists=.env scripts/hub-admin.ts",
+    "web:build": "node scripts/build-web.mjs",
+    "web:dev": "node --import tsx --env-file-if-exists=.env scripts/web-dev.ts"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",

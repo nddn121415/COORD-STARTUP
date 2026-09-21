@@ -24,6 +24,13 @@
       "@coord/peer-transfer": ["packages/peer-transfer/src/index.ts"]
     }
   },
-  "include": ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "*.ts"],
+  "include": [
+    "api/**/*.ts",
+    "apps/**/*.ts",
+    "packages/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "*.ts"
+  ],
   "exclude": ["apps/portal", "node_modules", "dist"]
 }

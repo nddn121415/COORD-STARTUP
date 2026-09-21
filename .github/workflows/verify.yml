@@ -18,6 +18,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+      - run: pnpm web:build
       - run: pnpm --dir apps/portal exec tsc --noEmit
       - run: pnpm --dir apps/portal build
       - run: pnpm --filter @coord/desktop build

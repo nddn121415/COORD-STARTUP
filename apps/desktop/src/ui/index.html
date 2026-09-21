@@ -26,7 +26,7 @@
     <main>
       <header>
         <span>Workspace / <strong>Shared project</strong></span
-        ><span class="badge">EARLY ACCESS · 0.6</span>
+        ><span class="badge">EARLY ACCESS · 0.7</span>
       </header>
       <div class="content">
         <div class="heading">
@@ -38,6 +38,25 @@
           <span id="status" class="pill">Starting</span>
         </div>
         <div id="notice" role="status" aria-live="polite" hidden></div>
+        <section class="card" id="account-card">
+          <h2>Your collaboration account</h2>
+          <div id="account-signed-out">
+            <label for="website-url">Collaboration website</label
+            ><input
+              id="website-url"
+              type="url"
+              placeholder="https://your-coord-website.example"
+            /><button id="account-signin" class="primary">Sign in through website →</button>
+            <p id="account-pairing" class="muted small"></p>
+          </div>
+          <div id="account-signed-in" hidden>
+            <p id="account-user"></p>
+            <div id="account-project-list"></div>
+            <button id="account-projects" class="secondary">Refresh projects</button
+            ><button id="account-signout" class="text">Sign out</button>
+          </div>
+          <p id="account-error" class="muted small"></p>
+        </section>
         <section id="setup">
           <article class="card service-card">
             <span class="step">A SHARED PROJECT, ALWAYS AVAILABLE</span>

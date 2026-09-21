@@ -11,6 +11,7 @@ const hub = await createHub({
     process.env.COORD_HUB_DATA ?? process.env.COORD_HUB_DATA_DIRECTORY ?? './.coord/hub',
   ),
   adminToken,
+  portalToken: process.env.COORD_PORTAL_TOKEN,
   host: process.env.COORD_HUB_HOST ?? '127.0.0.1',
   port: Number(process.env.COORD_HUB_PORT ?? 4200),
 });

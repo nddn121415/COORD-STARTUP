@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { AddressInfo } from 'node:net';
 import { z } from 'zod';
+import { accountRoutes, AccountError } from './accounts.js';
 import { createPeerSession, type PeerOptions } from '../desktop/peer-session.js';
 
 type Project = { id: string; name: string; createdAt: number };
@@ -12,6 +13,7 @@ type Session = Awaited<ReturnType<typeof createPeerSession>>;
 export type HubOptions = {
   dataDirectory: string;
   adminToken: string;
+  portalToken?: string;
   port?: number;
   host?: string;
   network?: PeerOptions['network'];
@@ -92,6 +94,11 @@ async function acquireSingleton(root: string) {
 }
 /** Private administration API. Public peer traffic uses authenticated encrypted DHT sessions. */
 export async function createHub(options: HubOptions) {
+  if (
+    options.portalToken &&
+    (!/^[a-f0-9]{64}$/i.test(options.portalToken) || options.portalToken === options.adminToken)
+  )
+    throw new Error('COORD_PORTAL_TOKEN must be a distinct random64hex token');
   if (!/^[a-f0-9]{64,256}$/i.test(options.adminToken) || options.adminToken.length % 2 !== 0)
     throw new Error(
       'COORD_HUB_ADMIN_TOKEN must be a random token of at least 32 bytes encoded as hexadecimal',
@@ -168,6 +175,30 @@ export async function createHub(options: HubOptions) {
         network: options.network,
         autoApproveInvitations: true,
         watchFolder: false,
+        authorizePeer: options.portalToken
+          ? (peerId: string) => {
+              try {
+                if (
+                  !db
+                    .prepare('SELECT 1 FROM account_members WHERE project_id=? LIMIT 1')
+                    .get(project.id)
+                )
+                  return true;
+                return Boolean(
+                  db
+                    .prepare(
+                      `SELECT 1 FROM account_devices d
+              JOIN account_sessions s ON s.hash=d.session_hash
+              JOIN account_members m ON m.project_id=d.project_id AND m.user_id=d.user_id
+              WHERE d.project_id=? AND d.peer_id=? AND s.user_id=d.user_id AND s.kind='device' AND s.expires>?`,
+                    )
+                    .get(project.id, peerId, Date.now()),
+                );
+              } catch {
+                return false;
+              }
+            }
+          : undefined,
       });
       try {
         if (session.getState().status === 'idle') await session.host(folder);
@@ -189,12 +220,57 @@ export async function createHub(options: HubOptions) {
       db.close();
       throw error;
     }
+    const accounts = accountRoutes({
+      db,
+      portalToken: options.portalToken,
+      body: jsonBody,
+      exclusive,
+      create: async (name) => {
+        if (projects().length >= 20) throw new AccountError(409, 'Hub project limit reached');
+        const project = { id: randomUUID(), name, createdAt: Date.now() };
+        db.prepare('INSERT INTO projects VALUES(?,?,?)').run(project.id, name, project.createdAt);
+        try {
+          await start(project);
+        } catch (error) {
+          db.prepare('DELETE FROM projects WHERE id=?').run(project.id);
+          throw error;
+        }
+        return project;
+      },
+      detail: async (id) => {
+        const project = lookup(id),
+          state = sessions.get(id)?.getState();
+        return {
+          ...project,
+          status: state?.status ?? 'offline',
+          peers: state?.peers ?? [],
+          files: state?.files ?? [],
+          activity: state?.activity ?? [],
+          conflicts: state?.conflicts ?? [],
+        };
+      },
+      invite: async (id, peerId) => {
+        const session = await start(lookup(id));
+        await session.invite(peerId);
+        const key = session.getState().key;
+        if (!key) throw new AccountError(503, 'Invitation unavailable');
+        return key;
+      },
+      revoke: async (id, peerId) => {
+        await (await start(lookup(id))).revoke(peerId);
+      },
+    });
     const server = createServer({ maxHeaderSize: 8192 }, (req, res) => {
       void (async () => {
         if (req.headers.origin !== undefined)
           throw new HttpError(403, 'Browser requests are not allowed');
         if (req.url === '/healthz' && req.method === 'GET') {
           reply(res, 200, { ok: !closing });
+          return;
+        }
+        if (req.url?.startsWith('/account/')) {
+          if (closing) throw new HttpError(503, 'Hub is stopping');
+          reply(res, 200, await accounts(req));
           return;
         }
         const supplied = Buffer.from(req.headers.authorization ?? '');
@@ -285,9 +361,16 @@ export async function createHub(options: HubOptions) {
           active--;
         }
       })().catch((error) =>
-        reply(res, error instanceof HttpError ? error.status : 503, {
-          error: error instanceof HttpError ? error.message : 'Hub operation unavailable',
-        }),
+        reply(
+          res,
+          error instanceof HttpError || error instanceof AccountError ? error.status : 503,
+          {
+            error:
+              error instanceof HttpError || error instanceof AccountError
+                ? error.message
+                : 'Hub operation unavailable',
+          },
+        ),
       );
     });
     server.requestTimeout = 10000;
