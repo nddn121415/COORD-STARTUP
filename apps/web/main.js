@@ -162,32 +162,6 @@ async function detail(id) {
     );
   for (const conflict of result.conflicts ?? []) panel.append(node('p', conflict, 'error'));
 }
-$('#auth-form').addEventListener('submit', (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  void run(form.querySelector('[type=submit]'), async () => {
-    await api('login', Object.fromEntries(new FormData(form)));
-    form.reset();
-    await load();
-    notify('Signed in.');
-  });
-});
-$('#register').addEventListener(
-  'click',
-  (event) =>
-    void run(event.currentTarget, async () => {
-      const form = $('#auth-form');
-      if (!form.reportValidity()) return;
-      const result = await api('register', Object.fromEntries(new FormData(form)));
-      form.reset();
-      if (result.confirmationRequired) {
-        notify(result.message || 'Check your email to confirm your account.');
-        return;
-      }
-      await load();
-      notify('Account created.');
-    }),
-);
 $('#logout').addEventListener(
   'click',
   (event) =>
@@ -263,22 +237,20 @@ if (location.pathname === '/connect') {
 void (async () => {
   try {
     const config = await api('config');
-    $('#google').hidden = !config.googleEnabled;
+    $('#google').disabled = config.googleEnabled !== true;
+    $('#auth-help').textContent =
+      config.googleEnabled === true
+        ? 'Sign in securely with Google. New to COORD? Your account is created automatically.'
+        : 'Google sign-in is being set up. Please check back shortly.';
     if (config.mode === 'supabase' && !config.hubConfigured) {
       $('#service-status').hidden = false;
       $('#service-status').textContent =
         'Accounts and project invitations are ready. Desktop file collaboration needs the always-on service to be deployed.';
     }
   } catch {
-    const input = $('#identifier');
-    input.name = 'username';
-    input.type = 'text';
-    input.maxLength = 32;
-    input.minLength = 3;
-    input.pattern = '[a-zA-Z0-9_]{3,32}';
-    input.placeholder = 'your_name';
-    $('#identifier-label').textContent = 'Username';
-    $('#auth-help').textContent = 'Early testing uses a username and password.';
+    $('#google').disabled = true;
+    $('#auth-help').textContent =
+      'Google sign-in is temporarily unavailable. Refresh this page to try again.';
   }
   await load();
 })().catch((error) => {

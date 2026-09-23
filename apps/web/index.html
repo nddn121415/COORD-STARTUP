@@ -34,39 +34,21 @@
         <div>
           <div class="eyebrow">YOUR WORKSPACE</div>
           <h2>Sign in to COORD</h2>
-          <p>Use the same account on the website and your desktop app.</p>
+          <p>
+            Use your Google account on the website and your desktop app. Your COORD account is
+            created when you first sign in.
+          </p>
         </div>
-        <form id="auth-form">
-          <label
-            ><span id="identifier-label">Email</span
-            ><input
-              id="identifier"
-              name="email"
-              type="email"
-              autocomplete="username"
-              maxlength="254"
-              placeholder="you@example.com"
-              required /></label
-          ><label
-            >Password<input
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              minlength="12"
-              maxlength="128"
-              placeholder="At least 12 characters"
-              required
-          /></label>
+        <div>
           <div class="actions">
-            <button class="primary" type="submit">Sign in</button
-            ><button type="button" id="register">Create account</button>
+            <button class="primary" type="button" id="google" aria-describedby="auth-help" disabled>
+              Continue with Google
+            </button>
           </div>
-          <button type="button" id="google" hidden>Continue with Google</button
-          ><small id="auth-help"
-            >Confirm your email after creating an account. Google sign-in is available when
-            configured.</small
+          <small id="auth-help" role="status" aria-live="polite"
+            >Checking Google sign-in availability…</small
           >
-        </form>
+        </div>
       </section>
       <section id="pairing" class="panel" hidden>
         <div>
@@ -139,8 +121,8 @@
             <span class="step">01</span>
             <h3>Make a team space</h3>
             <p>
-              Create an account and a project. Share an invitation key with someone you want to
-              collaborate with.
+              Sign in with Google and create a project. Share an invitation key with someone you
+              want to collaborate with.
             </p>
           </div>
           <div class="card">

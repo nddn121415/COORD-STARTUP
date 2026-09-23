@@ -6,13 +6,13 @@ Codex and Claude Code stay local, in their existing workflows. COORD tracks task
 
 This is a functional developer prototype, with real PostgreSQL persistence, authenticated WebSockets, local Git observation and an official SDK MCP server. It is not a production identity service. Automated tests exercise two independent connectors and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
 
-## Account website and desktop (0.7 early testing)
+## Account website and desktop (0.8 early testing)
 
-The new website supports username/password accounts, shared projects, one-use membership invitations, desktop sign-in approval, and access removal. The desktop runs in the background: sign in through the website, choose a project, and select a local folder. Existing key-based computer sharing remains available.
+The website uses Google sign-in, shared projects, one-use membership invitations, desktop sign-in approval, and access removal. Google provider setup must be completed before users can sign in. The desktop runs in the background: sign in through the website, choose a project, and select a local folder. Existing key-based computer sharing remains available.
 
 **Account projects now use HTTPS and Supabase for shared files and coordination.** Vercel serves the website and account API. Supabase Auth handles sign-in; PostgreSQL stores membership, invitations, approved devices, shared source, reservations and agent activity. No separate Linux hub or creator laptop is required for these projects. Git is not the live sharing transport. The service operator can read shared source.
 
-Follow the [Vercel and Supabase setup guide](docs/vercel-early-testing.md). Apply both SQL migrations and set `COORD_STORAGE_MODE=supabase` in Vercel. The legacy hub and computer-key transports remain available for existing installations. The old `apps/portal` Sites preview remains separate.
+Follow the [Vercel and Supabase setup guide](docs/vercel-early-testing.md). Apply both SQL migrations and set `COORD_STORAGE_MODE=supabase` and `COORD_AUTH_MODE=google` in Vercel. Set `COORD_GOOGLE_ENABLED=1` after configuring Google OAuth in Supabase. The legacy hub and computer-key transports remain available for existing installations. The old `apps/portal` Sites preview remains separate.
 
 [**COORD 0.8 Mac prerelease**](https://github.com/nddn121415/COORD-STARTUP/releases/tag/desktop-v0.8.1) targets Apple silicon/macOS 13+. The tag-triggered desktop workflow builds and publishes its installer; availability depends on that workflow succeeding. It is ad-hoc signed, not Apple-notarized. It defaults to `https://coord-startup-control-plane.vercel.app`; `COORD_WEBSITE_URL` overrides this when building for another deployment. Use 0.8 or later for HTTPS projects; old clients get an update message.
 

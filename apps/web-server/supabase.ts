@@ -12,6 +12,7 @@ type Options = {
   hubUrl?: string;
   portalToken?: string;
   googleEnabled?: boolean;
+  googleOnly?: boolean;
   storageMode?: 'supabase';
   fetch?: typeof fetch;
 };
@@ -236,6 +237,7 @@ export function createSupabaseHandler(options: Options) {
         send(res, 200, {
           mode: 'supabase',
           googleEnabled: options.googleEnabled === true,
+          ...(options.googleOnly ? { authMode: 'google' } : {}),
           hubConfigured:
             options.storageMode === 'supabase' || Boolean(options.hubUrl && options.portalToken),
           ...(options.storageMode === 'supabase' ? { syncTransport: 'https' } : {}),
@@ -244,6 +246,7 @@ export function createSupabaseHandler(options: Options) {
         return;
       }
       if ((path === 'register' || path === 'login') && method === 'POST') {
+        if (options.googleOnly) throw new ApiError(403, 'Use Google to sign in to COORD.');
         if (bearer) throw new ApiError(400, 'Use browser sign-in');
         const value = authInput.safeParse(await requestBody(req));
         if (!value.success)
@@ -512,7 +515,10 @@ const handler = createSupabaseHandler({
   hubUrl: process.env.COORD_HUB_URL,
   portalToken: process.env.COORD_PORTAL_TOKEN,
   googleEnabled: process.env.COORD_GOOGLE_ENABLED === '1',
+  googleOnly: process.env.COORD_AUTH_MODE === 'google',
   storageMode: process.env.COORD_STORAGE_MODE === 'supabase' ? 'supabase' : undefined,
 });
 export default (req: Request, res: ServerResponse) =>
-  process.env.SUPABASE_URL ? handler(req, res) : legacy(req, res);
+  process.env.SUPABASE_URL || process.env.COORD_AUTH_MODE === 'google'
+    ? handler(req, res)
+    : legacy(req, res);

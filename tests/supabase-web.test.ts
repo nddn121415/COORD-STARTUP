@@ -12,13 +12,18 @@ const closes: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const close of closes.splice(0)) await close();
 });
-async function fixture(upstream: typeof fetch, cloud = false) {
+async function fixture(
+  upstream: typeof fetch,
+  cloud = false,
+  auth: { googleOnly?: boolean; googleEnabled?: boolean } = {},
+) {
   const handler = createSupabaseHandler({
     url: 'https://example.supabase.co',
     websiteUrl: site,
     publishableKey: 'sb_publishable_public',
     secretKey: secret,
-    googleEnabled: true,
+    googleEnabled: auth.googleEnabled ?? true,
+    googleOnly: auth.googleOnly,
     storageMode: cloud ? 'supabase' : undefined,
     fetch: upstream,
   });
@@ -334,4 +339,65 @@ it('transfers the largest supported file and propagates reservation and revoked-
   expect((await response.json()).contentBase64).toBe(contentBase64);
   fail = true;
   expect((await post()).status).toBe(403);
+});
+
+it('blocks email login and registration in Google-only mode before contacting authentication or the database', async () => {
+  const upstream = vi.fn<typeof fetch>();
+  const call = await fixture(upstream, true, { googleOnly: true });
+  for (const route of ['login', 'register']) {
+    for (const body of [
+      { email: 'alice@example.com', password: 'very-long-password' },
+      { username: 'alice', password: 'very-long-password' },
+      {},
+    ]) {
+      const response = await call(route, json(body));
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Use Google to sign in to COORD.' });
+      expect(response.headers.getSetCookie()).toHaveLength(0);
+    }
+  }
+  expect(upstream).not.toHaveBeenCalled();
+  expect(await (await call('config')).json()).toMatchObject({
+    authMode: 'google',
+    googleEnabled: true,
+  });
+});
+it('reports unavailable Google setup and rejects OAuth start without creating a browser state', async () => {
+  const upstream = vi.fn<typeof fetch>();
+  const call = await fixture(upstream, true, { googleOnly: true, googleEnabled: false });
+  expect(await (await call('config')).json()).toMatchObject({
+    authMode: 'google',
+    googleEnabled: false,
+  });
+  const start = await call('google', json({ next: '/connect?code=ABC1234567' }));
+  expect(start.status).toBe(503);
+  expect(await start.json()).toEqual({ error: 'Google sign-in is not configured yet' });
+  expect(start.headers.getSetCookie()).toHaveLength(0);
+  expect(upstream).not.toHaveBeenCalled();
+});
+it('preserves the desktop pairing code through Google-only PKCE sign-in', async () => {
+  const upstream = vi.fn<typeof fetch>(async (url) =>
+    String(url).includes('/token?')
+      ? Response.json({ access_token: access, refresh_token: refresh })
+      : Response.json({ id: uid }),
+  );
+  const call = await fixture(upstream, true, { googleOnly: true });
+  const start = await call('google', json({ next: '/connect?code=ABC1234567' }));
+  expect(start.status).toBe(200);
+  const provider = new URL((await start.json()).url);
+  expect(provider.searchParams.get('provider')).toBe('google');
+  expect(provider.searchParams.get('code_challenge_method')).toBe('s256');
+  const state = new URL(provider.searchParams.get('redirect_to')!).searchParams.get('state');
+  const response = await call('callback?code=google-code&state=' + state, {
+    headers: {
+      Cookie: start.headers.getSetCookie()[0]!.split(';')[0]!,
+      'sec-fetch-site': 'cross-site',
+    },
+  });
+  expect(response.status).toBe(303);
+  expect(response.headers.get('location')).toBe(site + '/connect?code=ABC1234567');
+  expect(response.headers.getSetCookie().join(';')).toContain('__Host-coord_access=');
+  expect(upstream.mock.calls[0]![0]).toBe(
+    'https://example.supabase.co/auth/v1/token?grant_type=pkce',
+  );
 });

@@ -5,7 +5,7 @@ Account projects use ordinary HTTPS between the native desktop app and the Verce
 ## Operator setup
 
 1. Apply both SQL migrations in [supabase/migrations](../supabase/migrations), in order. Each migration runs atomically. Keep the database's RLS and service-only RPC grants intact.
-2. Configure Supabase Auth: the production website origin is the Site URL; allow its `/api/account/callback` and `/api/account/callback?state=*` redirects. Configure Google OAuth or a production SMTP provider before inviting arbitrary users. Supabase's default email sender is restricted; a working database does not prove email delivery or Google login is configured.
+2. Configure Supabase Auth: the production website origin is the Site URL; allow its `/api/account/callback` and `/api/account/callback?state=*` redirects. Configure and verify the Google provider before inviting users or disabling an existing login method. After Google works, disable the Email provider and leave unrelated providers disabled in Supabase; this deployment uses only Google sign-in. A working database does not prove Google OAuth is configured.
 3. Import the repository root into Vercel. Use the checked-in `vercel.json`, framework Other, build `node scripts/build-web.mjs`, output `dist/web`. Keep the explicit rewrite to `api/account.ts`; nested account routes depend on it.
 4. Configure server-side variables:
 
@@ -15,19 +15,20 @@ Account projects use ordinary HTTPS between the native desktop app and the Verce
    SUPABASE_SECRET_KEY=YOUR_SERVER_SECRET
    COORD_WEBSITE_URL=https://YOUR_PRODUCTION_WEBSITE
    COORD_STORAGE_MODE=supabase
+   COORD_AUTH_MODE=google
    COORD_GOOGLE_ENABLED=0
    ```
 
-   Set `COORD_GOOGLE_ENABLED=1` only after configuring Google's provider in Supabase. Keep `SUPABASE_SECRET_KEY` secret and out of browser/desktop bundles, Git and URLs. The HTTPS mode does not use `COORD_HUB_URL` or `COORD_PORTAL_TOKEN`.
+   Set `COORD_GOOGLE_ENABLED=1` only after configuring Google's provider in Supabase. `COORD_AUTH_MODE=google` blocks email/password login and registration; the website keeps its Google button disabled with a setup message until the provider is enabled. Keep `SUPABASE_SECRET_KEY` secret and out of browser/desktop bundles, Git and URLs. The HTTPS mode does not use `COORD_HUB_URL` or `COORD_PORTAL_TOKEN`.
 
-5. Deploy after changing variables. `/api/account/config` should return `mode:supabase`, `syncTransport:https`, `hubConfigured:true`; the compatibility flag means a collaboration backend is configured. It does not test OAuth or the database schema.
+5. Deploy after changing variables. `/api/account/config` should return `mode:supabase`, `authMode:google`, `syncTransport:https`, `hubConfigured:true`; the compatibility flag means a collaboration backend is configured. It does not test OAuth or the database schema.
 6. Publish desktop 0.8 or later using the desktop release workflow and link that release on the website. Older apps receive an explicit update message when connecting an HTTPS project.
 
 [Vercel configuration](https://vercel.com/docs/project-configuration) and [environment variables](https://vercel.com/docs/environment-variables) describe deployment settings. Source is stored in the selected Supabase project and is readable by its operator; this is not end-to-end encrypted storage.
 
 ## What testers do
 
-1. Sign in on the website, create a project and privately send a one-use membership invitation to a teammate.
+1. Sign in with Google on the website, create a project and privately send a one-use membership invitation to a teammate.
 2. Download COORD, open it, click **Sign in through website** and approve its displayed code in the browser.
 3. Choose the project and a local folder. The first contributor can select existing source; a teammate can select an empty folder to receive it.
 4. The teammate signs in with their own account, accepts the invitation, connects their desktop and chooses their folder.
@@ -44,7 +45,7 @@ The current Mac package is ad-hoc signed and not notarized. A broad public beta 
 
 ## Troubleshooting
 
-- **Login fails:** check Supabase provider configuration, Google credentials or SMTP, and exact callback URLs. Email confirmation remains required.
+- **Google sign-in is unavailable:** complete Google provider configuration, set `COORD_GOOGLE_ENABLED=1`, and redeploy. For OAuth errors, check the Google credentials, permitted audience/test users and exact callback URLs. No email/password sign-in or SMTP fallback is used.
 - **Project connection asks for an update:** install COORD 0.8 or later.
 - **Files stop syncing:** inspect the app's error. Confirm both migrations and `COORD_STORAGE_MODE=supabase`; check project membership/device approval and Supabase availability. Local drafts are preserved.
 - **API responds with a Vercel login page:** the deployment is protected. Use the intended production website, without embedding a protection bypass secret in the desktop app.
