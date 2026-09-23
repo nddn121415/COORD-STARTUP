@@ -18,7 +18,7 @@ For this COORD deployment, the Supabase origin is `https://vlydsenwhvrnwuodgdgo.
 
 1. In Supabase Authentication → URL Configuration, set the Site URL to the website origin. Allow `https://coord-startup-control-plane.vercel.app/api/account/callback` and `https://coord-startup-control-plane.vercel.app/api/account/callback?state=*`. The wildcard only covers the state on this fixed origin and path; the server checks the random state against its HttpOnly cookie before exchanging a code.
 2. Set `COORD_AUTH_MODE=google` on Vercel. This rejects the website's email/password login and registration endpoints. Disable the Email provider and leave unrelated providers disabled in Supabase Authentication → Sign In / Providers so direct Supabase API calls cannot offer another sign-in method. Google-only sign-in does not require SMTP.
-3. For Google, create a Web application OAuth client in Google Cloud. Use the website origin as its authorized JavaScript origin and `https://vlydsenwhvrnwuodgdgo.supabase.co/auth/v1/callback` as its authorized redirect URI. Configure the consent audience appropriately; an app in Testing needs test users. Supply the client ID and secret under Supabase Authentication → Sign In / Providers → Google, enable it, and leave nonce and email checks enabled. Use only basic identity scopes (openid, email, profile).
+3. For Google, create a Web application OAuth client in Google Cloud. Use the website origin as its authorized JavaScript origin and `https://vlydsenwhvrnwuodgdgo.supabase.co/auth/v1/callback` as its authorized redirect URI. Configure the consent audience appropriately. Google exempts sign-in requests limited to basic name, email and profile scopes from the test-user-list requirement, even while the app is in Testing; additional scopes can introduce restrictions. Supply the client ID and secret under Supabase Authentication → Sign In / Providers → Google, enable it, and leave nonce and email checks enabled. Use only basic identity scopes (openid, email, profile).
 4. Save `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and `COORD_WEBSITE_URL` in the Vercel project's Production environment. Set `COORD_GOOGLE_ENABLED=1` only after Google is configured. Redeploy. Keep the secret value in Vercel's Secret type, never in a public-prefixed variable or source file.
 5. Check `/api/account/config`, then verify `authMode:google`, a real Google login and project creation. Desktop pairing can be tested now; connecting a cloud project folder requires the second migration and HTTPS mode described in [the deployment guide](../docs/vercel-early-testing.md).
 
@@ -26,7 +26,7 @@ Legacy backend deployments can omit `COORD_AUTH_MODE` to retain their existing e
 
 The local `web:dev` command currently targets the legacy loopback hub. Test the Supabase flow on a configured HTTPS deployment because it uses Secure, host-only cookies and an exact HTTPS origin.
 
-References: [Supabase Google login](https://supabase.com/docs/guides/auth/social-login/auth-google), [redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls), [API keys](https://supabase.com/docs/guides/api/api-keys).
+References: [Supabase Google login](https://supabase.com/docs/guides/auth/social-login/auth-google), [Google audience rules](https://support.google.com/cloud/answer/15549945), [redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls), [API keys](https://supabase.com/docs/guides/api/api-keys).
 
 ## Shared source API
 
