@@ -2,9 +2,9 @@
 
 **COORD makes your team's coding agents aware of each other's work.**
 
-Codex and Claude Code stay local, in their existing workflows. COORD tracks task ownership, intended files, observed Git changes, conflicts, structured project facts and handoffs. No custom IDE is required. Source files and transcripts stay on the laptop by default; the control plane receives coordination metadata. Explicit file sharing sends selected source/text files directly to another computer over pinned HTTPS, into a review folder.
+Codex and Claude Code stay local, in their existing workflows. The desktop connects a selected project folder to a shared account project, synchronizes supported source files, and gives participating agents tools to report activity and reserve files. No custom IDE is required. Account projects store shared source in Supabase; private agent conversations are not collected. Older direct-transfer and developer control-plane modes remain available separately.
 
-This is a functional developer prototype, with real PostgreSQL persistence, authenticated WebSockets, local Git observation and an official SDK MCP server. It is not a production identity service. Automated tests exercise two independent connectors and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
+This is an early-testing prototype, with Supabase Google sign-in, PostgreSQL persistence, HTTPS folder synchronization and an official SDK MCP server. Automated tests exercise independent desktops, real SQL and actual stdio MCP subprocesses. Interactive Codex/Claude sessions on two physical laptops are a documented manual validation, not a claimed automated result.
 
 ## Account website and desktop (0.8 early testing)
 
@@ -20,7 +20,7 @@ Early-access limits: UTF-8 source files only, 1 MiB/file, 500 files and 16 MiB/p
 
 For the native flow see [desktop setup](apps/desktop/README.md). The [older two-Mac key walkthrough](docs/LOCAL_DESKTOP.md) remains useful for computer-hosted testing. Published desktop0.5 does not support account or service sign-in.
 
-## Download and try file transfer
+## Older standalone file-transfer tester
 
 [**Download the file-transfer tester**](https://github.com/nddn121415/COORD-STARTUP/releases/latest/download/coord-peer.zip) · [Releases](https://github.com/nddn121415/COORD-STARTUP/releases)
 
@@ -40,7 +40,7 @@ Already developing this repository? Run `pnpm demo:peer`. To build and check the
 
 **GitHub stores this product's source code. Git is never the live sharing transport.**
 
-Coordination uses authenticated WebSockets. The new `share-files` and `receive-files` commands transfer selected code directly between computers over encrypted HTTPS, without a Git push/pull or any file-content upload to COORD's server. Uncommitted files work too. Receiving stages a private copy for review and never applies or executes it automatically.
+Account projects use HTTPS through Vercel and Supabase, synchronize uncommitted source, and continue when the creator is offline. In the older developer control-plane mode, coordination uses authenticated WebSockets. The separate `share-files` and `receive-files` commands transfer selected code directly between computers over encrypted HTTPS, without uploading file contents to COORD's server. That standalone transfer stages a private copy for review.
 
 Start with the [direct computer-to-computer walkthrough](docs/DIRECT_TRANSFER.md). This standalone transfer needs neither a database nor COORD login. The `--wifi` option uses public HyperDHT discovery and automatic UDP hole punching. Discovery exposes connection metadata, not your invitation token or source files. The original HTTPS mode remains available for explicitly reachable addresses.
 

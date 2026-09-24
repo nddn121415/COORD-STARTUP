@@ -604,6 +604,14 @@ export async function createPeerSession(options: PeerOptions) {
       lastSnapshot = payload.files;
       digest = payload.digest;
     }
+    if (saved.folder && options.watchFolder !== false) {
+      const result = await reconcileSnapshot(saved.folder, lastSnapshot, saved.baseline);
+      saved.baseline = result.baseline;
+      state.conflicts = result.conflicts;
+      await save();
+    }
+    // Expose a received revision only after its local reconciliation finishes.
+    // Other IPC calls can read state while the filesystem work is awaiting I/O.
     state.activity = payload.context.agents;
     state.files = lastSnapshot.map((f) => ({
       path: f.path,
@@ -614,12 +622,6 @@ export async function createPeerSession(options: PeerOptions) {
       state.peers = payload.context.peers
         .filter((p) => p.id !== deviceId)
         .map((p) => ({ ...p, approved: true }));
-    if (saved.folder && options.watchFolder !== false) {
-      const result = await reconcileSnapshot(saved.folder, lastSnapshot, saved.baseline);
-      saved.baseline = result.baseline;
-      state.conflicts = result.conflicts;
-      await save();
-    }
     emit();
   }
   async function syncNow() {

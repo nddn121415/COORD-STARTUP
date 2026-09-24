@@ -1,12 +1,14 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import createTestnet from 'hyperdht/testnet.js';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createPeerSession, type PeerOptions } from './peer-session.js';
+import * as workspaceGuard from './workspace-guard.js';
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
   for (const close of cleanup.splice(0).reverse()) await close();
+  vi.restoreAllMocks();
 });
 async function until(fn: () => boolean | Promise<boolean>, label: string) {
   const deadline = Date.now() + 12000;
@@ -33,7 +35,10 @@ async function fixture(authorizePeer?: PeerOptions['authorizePeer']) {
   const host = await createPeerSession(hostOptions);
   cleanup.push(() => host.dispose());
   await host.host(hostFolder);
-  async function guest(name: string) {
+  async function guest(
+    name: string,
+    onCreated?: (peer: Awaited<ReturnType<typeof createPeerSession>>) => void,
+  ) {
     const folder = join(root, name);
     await mkdir(folder);
     const options = {
@@ -43,6 +48,7 @@ async function fixture(authorizePeer?: PeerOptions['authorizePeer']) {
     };
     const peer = await createPeerSession(options);
     cleanup.push(() => peer.dispose());
+    onCreated?.(peer);
     await peer.join(host.getState().key!, folder);
     await until(() => host.getState().pending.length > 0, 'pending approval');
     const id = host.getState().pending[0].id;
@@ -57,6 +63,39 @@ async function fixture(authorizePeer?: PeerOptions['authorizePeer']) {
   }
   return { host, hostOptions, hostFolder, guest, root };
 }
+it('does not expose received files while their local writes are still pending', async () => {
+  const { guest, root } = await fixture();
+  let entered!: () => void;
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reconcile = workspaceGuard.reconcileSnapshot;
+  vi.spyOn(workspaceGuard, 'reconcileSnapshot').mockImplementation(async (...args) => {
+    if (args[0] === join(root, 'delayed-files')) {
+      entered();
+      await released;
+    }
+    return reconcile(...args);
+  });
+  let peer!: Awaited<ReturnType<typeof createPeerSession>>;
+  const joining = guest('delayed-files', (created) => {
+    peer = created;
+  });
+  try {
+    await blocked;
+    expect(peer.getState().files).toEqual([]);
+    expect(await readFile(join(root, 'delayed-files/hello.ts')).catch(() => null)).toBeNull();
+  } finally {
+    release();
+    await joining;
+  }
+  expect(peer.getState().files.map((file) => file.path)).toEqual(['hello.ts']);
+  expect(await readFile(join(root, 'delayed-files/hello.ts'), 'utf8')).toBe('original\n');
+}, 30000);
 it('pairs by key with host approval, synchronizes ordinary folder saves, and reconnects with pinned identity', async () => {
   const { host, guest } = await fixture();
   const b = await guest('teammate');

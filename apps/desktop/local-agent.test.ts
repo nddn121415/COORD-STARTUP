@@ -7,6 +7,7 @@ import TOML from '@iarna/toml';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { callLocalAgentBridge, installLocalAgents, startLocalAgentBridge } from './local-agent.js';
+import { AccountRequestError } from './account-client.js';
 const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
@@ -16,6 +17,29 @@ async function root() {
   cleanups.push(() => rm(path, { recursive: true, force: true }));
   return path;
 }
+it.each([
+  ['Another agent reserved this path', 'reserved', 'work on different files'],
+  ['Reserve this file before publishing', 'reservation_required', 'coord_reserve'],
+  ['File reservation expired', 'reservation_required', 'reserve the paths again'],
+  ['File changed; refresh before publishing', 'stale_base', 'Do not overwrite newer work'],
+  ['File changed; refresh the project', 'stale_base', 'coord_read'],
+])('explains cloud coordination rejection: %s', async (message, code, advice) => {
+  const bridge = await startLocalAgentBridge({
+    stateDirectory: await root(),
+    getFolder: () => '/test-project',
+    request: async () => {
+      throw new AccountRequestError(message, 409);
+    },
+  });
+  cleanups.push(() => bridge.close());
+  const result = await callLocalAgentBridge(bridge.configPath, {
+    sessionId: randomUUID(),
+    folder: '/test-project',
+    operation: 'context',
+    input: {},
+  });
+  expect(result).toEqual({ rejected: true, code, reason: expect.stringContaining(advice) });
+});
 it('installs both project integrations without touching trust or unrelated MCP settings', async () => {
   const folder = await root();
   await mkdir(join(folder, '.codex'));

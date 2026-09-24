@@ -125,6 +125,32 @@ async function readConfig(path: string) {
 /** Return fixed public explanations, never callback exception text or local paths. */
 function domainRejection(error: unknown) {
   if (!(error instanceof Error)) return undefined;
+  const cloudReasons: Record<string, [string, string]> = {
+    'Another agent reserved this path': [
+      'reserved',
+      'Another agent owns a required file. Read coord_context to identify its reservation, then work on different files or wait for release.',
+    ],
+    'Reserve this file before publishing': [
+      'reservation_required',
+      'Reserve every changed path with coord_reserve before publishing or submitting.',
+    ],
+    'File reservation expired': [
+      'reservation_required',
+      'Your reservation expired. Read the latest shared files, reconcile your edits, then reserve the paths again before publishing.',
+    ],
+    'File changed; refresh before publishing': [
+      'stale_base',
+      'A shared file changed after your base was read. Read its current contents and base hash, reconcile your edits, then reserve and publish again. Do not overwrite newer work.',
+    ],
+    'File changed; refresh the project': [
+      'stale_base',
+      'Shared files changed while being read. Retry coord_read or coord_workspace to obtain the current version before editing.',
+    ],
+  };
+  if (Object.hasOwn(cloudReasons, error.message)) {
+    const [code, reason] = cloudReasons[error.message]!;
+    return { rejected: true, code, reason };
+  }
   const reasons: [string, string, string][] = [
     [
       'File reserved by ',
